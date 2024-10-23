@@ -22,3 +22,4 @@ jobs:
           github_action_config.auto_describe: "true" # enable auto describe
           github_action_config.auto_improve: "true" # enable auto improve
           github_action_config.pr_actions: ["opened", "reopened", "ready_for_review", "review_requested"]
+          litellm.set_verbose: "true" # Debug info
