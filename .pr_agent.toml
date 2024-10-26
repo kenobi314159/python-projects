@@ -1,5 +1,6 @@
 [config]
 # models
 model="gpt-4o-mini"
-model_turbo="gpt-3.5-turbo-1106"
-fallback_models=[""gpt-3.5-turbo", "anthropic/claude-3-5-sonnet-20240620", "claude-2"]
+#model_turbo="gpt-3.5-turbo-1106"
+model_turbo="gpt-4o-mini"
+fallback_models=[]
