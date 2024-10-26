@@ -4,3 +4,10 @@ model="gpt-4o-mini"
 #model_turbo="gpt-3.5-turbo-1106"
 model_turbo="gpt-4o-mini"
 fallback_models=[]
+
+
+[github_action_config]
+auto_review = true
+auto_describe = true
+auto_improve = true
+pr_actions = ['opened', 'reopened', 'ready_for_review', 'review_requested']

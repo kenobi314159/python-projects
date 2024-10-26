@@ -18,7 +18,3 @@ jobs:
         env:
           OPENAI_KEY: ${{ secrets.OPENAI_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          github_action_config.auto_review: "true" # enable auto review
-          github_action_config.auto_describe: "true" # enable auto describe
-          github_action_config.auto_improve: "true" # enable auto improve
-          github_action_config.pr_actions: ["opened", "reopened", "ready_for_review", "review_requested"]
