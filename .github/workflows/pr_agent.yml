@@ -22,5 +22,3 @@ jobs:
           github_action_config.auto_describe: "true" # enable auto describe
           github_action_config.auto_improve: "true" # enable auto improve
           github_action_config.pr_actions: ["opened", "reopened", "ready_for_review", "review_requested"]
-          litellm.set_verbose: True # Debug info
-          config.fallback_models: ["gpt-4o-2024-05-13", "gpt-4-32k", "gpt-3.5-turbo", "anthropic/claude-3-5-sonnet-20240620", "claude-2"]
