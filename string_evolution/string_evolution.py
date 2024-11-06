@@ -31,15 +31,6 @@ CHARS = string.ascii_letters + " " + string.digits + string.printable
 while (len(CHARS) < len(REF_STRING) * 2):
     CHARS += CHARS
 NUMBER_LIMIT = len(CHARS)
-REFERENCE_LEVELS = 5
-# Content of encoded gene:
-#   [ <number of used characters>]
-# + <all characters list>
-# <number of reference levels> * (
-#   [ <number of used indexes on level X> ]
-# + <all level X indexes list>
-# )
-ENCODED_GENE_LENGTH = (1 + NUMBER_LIMIT) * (1 + REFERENCE_LEVELS)
 MUTATIONS_NUM_MIN = 2
 MUTATIONS_NUM_MAX = 16
 MUTATION_SHIFT_MAX = 20 # Either + or -
@@ -48,32 +39,43 @@ MUTATION_SHIFT_MAX = 20 # Either + or -
 POPULATION_SIZE = 100
 SELECTION_SIZE = 5
 POPULATION_PER_SELECTED = POPULATION_SIZE // SELECTION_SIZE
-GENERATIONS_NUM = 10000
 
 class Genome:
-    def __init__(self, parent=None):
-        self.gene = [0 for i in range(ENCODED_GENE_LENGTH)]
+    def __init__(self, parent=None, ref_levels=1):
+        self.ref_levels = ref_levels
+        # Content of encoded gene:
+        #   [ <number of used characters>]
+        # + <all characters list>
+        # <number of reference levels> * (
+        #   [ <number of used indexes on level X> ] (only actually used for level 0)
+        # + <all level X indexes list>
+        # )
+        self.encoded_gene_length = (1 + NUMBER_LIMIT) * (1 + self.ref_levels)
+
+        self.gene = [0 for i in range(self.encoded_gene_length)]
         if (parent == None):
             self.generate_randomly()
         else:
             self.generate_from_parent(parent)
 
     def generate_randomly(self):
-        self.gene = [randint(0, NUMBER_LIMIT-1) for _ in range(ENCODED_GENE_LENGTH)]
+        self.gene = [randint(0, NUMBER_LIMIT-1) for _ in range(self.encoded_gene_length)]
 
     def generate_from_parent(self, parent):
         # Clone parent
+        self.ref_levels = parent.ref_levels
+        self.encoded_gene_length = parent.encoded_gene_length
         self.gene = parent.gene.copy()
 
         # Mutate parent
         mutations_num = randint(MUTATIONS_NUM_MIN, MUTATIONS_NUM_MAX)
         for i in range(mutations_num):
             shift = randint(-MUTATION_SHIFT_MAX, MUTATION_SHIFT_MAX)
-            mutation_index = randint(0, ENCODED_GENE_LENGTH-1)
+            mutation_index = randint(0, self.encoded_gene_length-1)
             self.gene[mutation_index] = (self.gene[mutation_index] + shift) % NUMBER_LIMIT
 
     def get_speciment(self):
-        return generate_string(self.get_characters(), [self.get_indexes(i) for i in range(REFERENCE_LEVELS)])
+        return generate_string(self.get_characters(), [self.get_indexes(i) for i in range(self.ref_levels)])
 
     def get_characters(self):
         characters = self.gene[1 : 1 + self.gene[0]]
@@ -155,7 +157,7 @@ def print_population(population):
     for w in population:
         c = "".join(w.get_characters())
         print(f"{len(c)} characters: |{c}|")
-        for e in range(REFERENCE_LEVELS):
+        for e in range(w.ref_levels):
             i = [(f"{x:3}, ") for x in w.get_indexes(e)]
             print(f"{len(i)} indexes {e}:")
             print_string(i)
@@ -165,10 +167,10 @@ def print_population(population):
         print(f"points: {p}")
         print("--------")
 
-def generate():
-    population = generate_population(Genome(), POPULATION_SIZE)
-    for i in range(GENERATIONS_NUM):
-        #if (i % 20 == 0):
+def generate(ref_levels, generations_num):
+    population = generate_population(Genome(ref_levels = ref_levels), POPULATION_SIZE)
+    for i in range(generations_num):
+        #if (i % 40 == 0):
         #    print_population(select_best_from_population(population, 5))
         selected = select_best_from_population(population, SELECTION_SIZE)
         if (evaluate_speciment(selected[0]) == 0):
@@ -178,11 +180,18 @@ def generate():
         for s in selected:
             population += generate_population(s, POPULATION_PER_SELECTED)
 
-    winner = select_best_from_population(population, 1)
-    print_population(winner)
-    print(f"Generations used: {i+1}")
+    #winner = select_best_from_population(population, 1)
+    #print_population(winner)
+    #print(f"Generations used: {i+1}")
     return i+1
 
 if (__name__ == "__main__"):
-    for i in range(10):
-        generate()
+    gens_all = []
+    for l in range(1, 4):
+        gens = []
+        for i in range(5):
+            gens.append(generate(l, 10000))
+        gens_all.append(sum(gens) / len(gens))
+        print(f"Average generations needed:")
+        for i,g in enumerate(gens_all):
+            print(f"ref levels {i+1} -> {g} generations")
