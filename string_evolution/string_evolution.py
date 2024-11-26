@@ -173,23 +173,23 @@ def generate(ref_levels, generations_num):
         #if (i % 40 == 0):
         #    print_population(select_best_from_population(population, 5))
         selected = select_best_from_population(population, SELECTION_SIZE)
-        if (evaluate_speciment(selected[0]) == 0):
+        if (evaluate_speciment(selected[0]) <= 10):
             population = [selected[0]]
             break
         population = []
         for s in selected:
             population += generate_population(s, POPULATION_PER_SELECTED)
 
-    #winner = select_best_from_population(population, 1)
-    #print_population(winner)
-    #print(f"Generations used: {i+1}")
+    winner = select_best_from_population(population, 1)
+    print_population(winner)
+    print(f"Generations used: {i+1}")
     return i+1
 
 if (__name__ == "__main__"):
     gens_all = []
-    for l in range(1, 4):
+    for l in range(1, 8):
         gens = []
-        for i in range(5):
+        for i in range(80):
             gens.append(generate(l, 10000))
         gens_all.append(sum(gens) / len(gens))
         print(f"Average generations needed:")
