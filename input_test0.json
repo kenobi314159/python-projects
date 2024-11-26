@@ -1,0 +1,39 @@
+{
+	"serial0" : {
+		"stage0" : "start",
+		"stage1" : "start2",
+		"parallel0" : {
+			"stage0" : "test0",
+			"serial0" : {
+				"parallel0" : {
+					"stage0" : "circle0",
+					"stage1" : "circle1",
+					"stage2" : "circle2"
+				},
+				"parallel1" : {
+					"stage0" : "triangle0",
+					"serial0" : {
+						"stage0" : "triangle10",
+						"stage1" : "triangle11"
+					},
+					"stage1" : "triangle2",
+					"stage2" : "triangle3"
+				}
+			},
+			"stage1" : "test1",
+			"stage2" : "test2",
+			"serial1" : {
+				"stage0" : "small_test0",
+				"parallel0" : {
+					"stage0" : "hack0",
+					"stage1" : "hack1",
+					"stage2" : "hack2",
+					"stage3" : "hack3",
+					"stage4" : "hack4"
+				},
+				"stage1" : "small_test1"
+			}
+		},
+		"stage2" : "end"
+	}
+}
