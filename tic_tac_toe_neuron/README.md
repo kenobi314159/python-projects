@@ -9,7 +9,7 @@ The model is continuously stored in files to enable resuming training later or c
 The program runs using multiple parallel processes.
 There is several "producer" processes which use the latest stored version of the model, run games with it to generate training data, and store the data in a shared memory.
 Then there is a single "consumer" process which reads the training data from the shared memory at configured time intervals, trains the model on it, and stores the new version of the model in a file for the producers to use.
-There is also an optional "testing" process, which runs the latest stored model against a simple hand coded Tic Tac Toe player (called "Fred") to provide continuous feedback on the model's performance in the console.
+There is also an optional "testing" process, which runs the latest stored model against a simple hand coded Tic Tac Toe player called "Fred" to provide continuous feedback on the model's performance in the console.
 
 ## Usage
 
@@ -77,6 +77,6 @@ After configuration, the training can be started, aborted, paused or continued u
 I have performed extensive training of models with various parameters, sometimes for several days straight.
 Due to limitations of memory size, the largest model I could train has configuration `model_grid_size=16`, `width=4`, `depth=128` leading to a dense network of 1024x128 neurons and 135 million parameters.
 The best result I could get was a model which seems like it's trying to play Tic Tac Toe, but still makes many mistakes.
-It couldn't consistently beat the hand coded player Fred even with relatively high Fred mistake rate set.
+It couldn't consistently beat the hand coded testing player Fred even with relatively high Fred mistake rate set.
 This means that it would stand no chance against a human player.
 For now, my conclusion is that there is either something wrong in my training approach or there is a need for much larger model to be able to learn the game.
