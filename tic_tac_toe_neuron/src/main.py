@@ -119,6 +119,9 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
                 if (use_losers):
                     losers.append(p0)
 
+            if (os.path.exists(abort_file) or os.path.exists(pause_file)):
+                break
+
         # Cut off to only get players with the shortest histories (fastest win/lose)
         len_prev = len(winners)
         winners = cutOffShortest(winners, shortest_cutoff)
@@ -132,10 +135,10 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
             stat_cutoff //= 2
 
         # Get training data
-        if (use_winners):
+        if (use_winners and len(winners)):
             training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef)
             winners = winners[1:]
-        else:
+        elif (len(losers)):
             training_data = losers[0].getTrainingData(win_strike_length, False, weights_scale_coef)
             losers = losers[1:]
 
