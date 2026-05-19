@@ -5,6 +5,7 @@ import tensorflow as tf
 
 from map_preprocess import *
 from model import *
+from print_log import *
 
 OUT_FILE = "out.log"
 
@@ -236,16 +237,39 @@ class TTTPlayerCNN:
 
         if (randint(0, 20) == 0):
             S += f"output:\n"
-            S += dataToStr(cnn_output)
-            inspected_values = [float(x[0]) for x in cnn_output]
+
+            S_map = dataToStr(cnn_output)
+            S_map = S_map.split("\n")
+            for i in range(len(S_map)):
+                S_map[i] = S_map[i].split(",")
+
+            # Add colored markers for input game state
+            for y,line in enumerate(selected_variant.getResizedMap(game_map, input_grid_size)):
+                for x,field in enumerate(line):
+                    if (field == 1):
+                        # Green X for "self"
+                        S_map[y][x] = "\033[38;5;46m   X\033[0m"
+                    if (field == 2):
+                        # Red O for "other"
+                        S_map[y][x] = "\033[38;5;196m   O\033[0m"
+                S += ",".join(S_map[y]) + "\n"
+
+            inspected_values = []
+            for line in cnn_output:
+                inspected_values += [float(x[0]) for x in line]
             S += f"turn: {game_x}:{game_y}\n"
             avg_v = sum(inspected_values) / len(inspected_values)
             min_v = min(inspected_values)
             max_v = max(inspected_values)
             S += f"avg: {avg_v:.05f}, min: {min_v:.05f}, max: {max_v:.05f}, variance: {max_v-min_v:.05f}\n"
-            
+
+            # Add colored markers for output values
+            S_colored = S.split("\n")
+            S_colored = process_log(S_colored)
+            S_colored = "\n".join(S_colored)
+
             with open(OUT_FILE, "w") as F:
-                F.write(S)
+                F.write(S_colored)
 
         return game_x, game_y
 

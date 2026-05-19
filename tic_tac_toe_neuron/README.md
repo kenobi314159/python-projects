@@ -73,6 +73,28 @@ After configuration, the training can be started, aborted, paused or continued u
 4. To resume training using the latest version of a model from previous run, start the program using `python3 src/main.py` with the `trainHero4` parameter `start_new` set to False.
    The program will load the latest model from the output directory and continue training it.
 
+### Logging
+
+As training progresses, the program prints out two types of logs in files.
+
+There is the `out.log` file, which contains weights outputed by one of the models for a randomly selected turn combined with input game state for that turn.
+The values in this log are color-coded, so by printing them in the console you can easily see which turns the model currently prefers and which it doesn't.
+This can give you some insight into what is currently the structure of teh model's output and if, for example, it isn't stuck on a constant output.
+The `out.log` can be printed nicely colored using the following command:
+
+```bash
+while true; do clear; cat out.log; sleep 4; done
+```
+
+The second type of logs are the `out.log_X` files.
+These files are also printed randomly and they contain the final states of randomly selected Tic Tac Toe matches.
+This allows you to see what kind of matches the model is currently able to play.
+It can be monitored using the following command:
+
+```bash
+watch -n 1 'cat out.log_*'
+```
+
 ## Results
 
 I have performed extensive training of models with various parameters, sometimes for several days straight.
