@@ -26,8 +26,10 @@ from storage import *
 grid_size = 12
 win_strike_length = 5
 
-# Maximum number of training data samples to allocate in memory
+# Maximum number of training data for each training call
 MAX_TRAINING_DATA_SIZE = 1500
+# Maximum number of training data samples to keep
+MAX_TRAINING_DATA_KEPT = MAX_TRAINING_DATA_SIZE * 100
 
 # Abort file name
 # If this file is present in the working directory, the training will be stopped
@@ -477,7 +479,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             model_games = model_games,
             model_inputs_trained = model_inputs_trained,
             model_input_map_func = mapToCnnInput,
-            max_training_data_size = 10000,
+            max_training_data_size = MAX_TRAINING_DATA_KEPT,
             train_interval = 60,
             store_interval = 10*60,
             batch_size = 150,
