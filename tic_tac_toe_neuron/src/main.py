@@ -438,11 +438,12 @@ def trainHero4(start_new, load_only=False, skip_training=False):
     model_name = f"hero_4_{model_grid_size}x{model_grid_size}"
 
     if (start_new):
-        depth = 128
+        depth = 1
         width = 4
         func0 = "elu"
         func1 = "tanh"
         func2 = "relu"
+        conv_layers = 3
         learning_rate = 0.000001
         dense_sizes = [
             model_grid_size * model_grid_size * width,
@@ -451,7 +452,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
         m_hero = createCnnModel(
             model_grid_size,
             model_grid_size,
-            conv_layers=0,
+            conv_layers=conv_layers,
             dense_sizes=dense_sizes,
             conv_activation="swish",
             mid_activations=mid_activations,
@@ -487,13 +488,13 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             threads_num = 4,
             use_testing_thread = True,
             shortest_cutoff = 0,
-            winner_weight = 3.0,
-            loser_weight = 3.0,
+            winner_weight = 10.0,
+            loser_weight = 0.0,
             kept_models = 3,
-            player_training_variants = 10,
-            top_random_select_size = 1,
-            weights_scale_coef = 1.5,
-            fred_mistake_rate = 0.7,
+            player_training_variants = 40,
+            top_random_select_size = 4,
+            weights_scale_coef = 0.0,
+            fred_mistake_rate = 0.2,
             test_runs = 50,
             train_against_top_random_select_1 = True
         )
@@ -503,7 +504,7 @@ if __name__ == "__main__":
     #exit(0)
     #import pdb; pdb.set_trace()
     p_user = TTTPlayerUser("User")
-    p_fred = TTTPlayerFred(0.7)
+    p_fred = TTTPlayerFred(0.2)
     #storage = ModelStorage()
     #p_other, _ = storage.loadLatesModelContaining("2025-03-09_07-02-28_hero_4_16x16_14720_6220000_depth-128_width-4_func-tanh_learnrate-0p00001_batch-400")
     #p_other = TTTPlayerCNN(p_other, mapToCnnInput)
