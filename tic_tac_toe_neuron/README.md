@@ -58,6 +58,7 @@ At this moment, all the parameters need to be modified in the src/main.py file b
     This allows to monitor improvements of the model even at stages when it is still very bad.
   - test_runs - Number of runs made by testing process before printing results.
     (Higher number leads to less frequent updates in the console, but more representative results.)
+  - train_against_top_random_select_1 - Instead of using the same value of top_random_select_size for both playing sides and then train on both data, use top_random_select_size for one player and 1 for the other. Then only train based on the data of the first one.
 
 ### Running
 
