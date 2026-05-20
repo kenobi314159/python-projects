@@ -52,8 +52,13 @@ At this moment, all the parameters need to be modified in the src/main.py file b
   - top_random_select_size - Number of highest model's output from which the actual desired turn is selected.
     This can be used to introduce some randomness into the model's decisions thus allowing to avoid local minimums in the training.
     For value 1, the model's highest output is always selected, leading to deterministic behavior.
-  - weights_scale_coef - Scaling coefficient for the weights of the training data samples based on length of the game.
-    This can be used to decrease the weight of training samples from games that took longer to finish, creating incentive to finish (win) games faster.
+  - weights_scale_coef - Scaling coefficient for the weights of the training data samples based on the remaining length of the game.
+    This can be used to decrease the weight of training samples which are far from the end of the game, creating higher rewards for turns that are closer to the end of the game.
+    For weights_scale_coef 0.0, all samples have the same weight coefficient 1.0.
+    For weights_scale_coef 1.0, the scaling is linear. So from the last to first turn it goes 1/1, 1/2, 1/3, etc.
+    For weights_scale_coef over 1.0, the scaling goes down slower and slower.
+    For example, for weights_scale_coef 4.0, it takes 16 turns to get down to coefficient 1/2.
+    For weights_scale_coef 5.0, it takes 32 turns.
   - fred_mistake_rate - Rate of mistakes made by the testing player Fred.
     This allows to monitor improvements of the model even at stages when it is still very bad.
   - test_runs - Number of runs made by testing process before printing results.

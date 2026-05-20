@@ -229,11 +229,12 @@ class TTTPlayerCNN:
         cnn_output_x, cnn_output_y, game_x, game_y, max_v = result
 
         # Generate referential data for all variants with the same turn
+        turn_index = self.turns_played-1
         for i,variant in enumerate(variants):
             variant_cnn_input = self.input_transform_func(variant.getResizedMap(game_map, input_grid_size), self.cnn_model.input_shape[1])
             self.cnn_input_history = tf.concat([self.cnn_input_history, variant_cnn_input], axis=0)
             variant_output = variant.gameToCnn(game_x, game_y)
-            self.result_history.append(variant_output)
+            self.result_history.append((turn_index, variant_output))
 
         if (randint(0, 20) == 0):
             S += f"output:\n"
@@ -274,23 +275,29 @@ class TTTPlayerCNN:
         return game_x, game_y
 
     def _getWeightData(self, win_strike_length, won, weights_scale_coef=0.0):
-        # The weight is devided by length of the game to get heigher weight for shorter games and lower weight for longer games
-        # The largest weight is for a game with minimum possible turns
+        # For each turn, the weight is devided by the number of remaining turns in the game.
+        # The largest weight (coefficient 1.0) is for the last turn.
+        # Each turn before that has its weight lowered based on the weights_scale_coef.
+        # For weights_scale_coef = 0.0, all turns have weight 1.0.
+        # For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
+        # For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
         target_weight = self.winner_weight if won else self.loser_weight
-        min_turns = win_strike_length
         steps = self.turns_played
-        if (weights_scale_coef == 0.0):
-            weight = target_weight
-        else:
-            weight = target_weight * (min_turns / steps)**weights_scale_coef
+        weight_data = [[target_weight] for i in range(len(self.result_history))]
 
-        weight_data = tf.constant([[weight] for i in range(1, len(self.result_history) + 1)], dtype=tf.float32)
-        return weight_data
+        if (weights_scale_coef > 0.0):
+            reverted_coef = 1.0 / weights_scale_coef
+            for i,r in enumerate(self.result_history):
+                turn,_ = r
+                turns_remaining = steps - turn
+                weight_data[i][0] = target_weight / (turns_remaining ** reverted_coef)
+
+        return tf.constant(weight_data, dtype=tf.float32)
 
     def _getRefOutputData(self, won):
         ref_output_data = []
         output_grid_size = self.cnn_model.output_shape[1]
-        for r in self.result_history:
+        for _,r in self.result_history:
             x = r[0]
             y = r[1]
             if (won):
