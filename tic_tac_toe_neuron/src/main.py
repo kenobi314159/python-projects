@@ -419,7 +419,7 @@ def testModelVersions(model_name, fractions=8, rounds=10):
     model_files = [fn for fn in storage.getStorageList() if model_name in fn]
     indexes = set()
     for mi in range(fractions):
-        indexes.add(mi*len(model_files)//8)
+        indexes.add(mi*len(model_files)//fractions)
     models = []
     names = []
     for mi in indexes:
