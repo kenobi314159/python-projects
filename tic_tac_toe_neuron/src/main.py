@@ -349,9 +349,14 @@ def testAgainstPlayer(model, enemy_player, rounds, verbosity=0, map_func=mapToCn
     none       = 0
 
     if (verbosity > 0):
-        print(f"Testing against enemy player X")
+        print(f"Testing against enemy player X", flush=True)
     ttt_play = TicTacToePlay(grid_size, grid_size, enemy_player, model_player, win_strike_length)
-    results = [ttt_play.play(verbosity) for _ in range(rounds//2)]
+    results = []
+    for _ in range(rounds//2):
+        if (os.path.exists(abort_file)):
+            print(f"Aborting", flush=True)
+            return 0, 0, 0
+        results.append(ttt_play.play(verbosity))
 
     model_wins += sum([1 for r in results if (r ==  2)])
     enemy_wins += sum([1 for r in results if (r ==  1)])
@@ -360,9 +365,14 @@ def testAgainstPlayer(model, enemy_player, rounds, verbosity=0, map_func=mapToCn
     none       += sum([1 for r in results if (r ==  0)])
 
     if (verbosity > 0):
-        print(f"Testing against enemy player O")
+        print(f"Testing against enemy player O", flush=True)
     ttt_play = TicTacToePlay(grid_size, grid_size, model_player, enemy_player, win_strike_length)
-    results = [ttt_play.play(verbosity) for _ in range(rounds - rounds//2)]
+    results = []
+    for _ in range(rounds//2):
+        if (os.path.exists(abort_file)):
+            print(f"Aborting", flush=True)
+            return 0, 0, 0
+        results.append(ttt_play.play(verbosity))
 
     model_wins += sum([1 for r in results if (r ==  1)])
     enemy_wins += sum([1 for r in results if (r ==  2)])
@@ -371,39 +381,94 @@ def testAgainstPlayer(model, enemy_player, rounds, verbosity=0, map_func=mapToCn
     none       += sum([1 for r in results if (r ==  0)])
 
     if (verbosity > 0):
-        print(f"Results:")
-        print(f"  model_wins: {model_wins}")
-        print(f"  enemy_wins: {enemy_wins}")
-        print(f"  draws: {draws}")
+        print(f"Results:\n"\
+           +f"  model_wins: {model_wins}\n"\
+           +f"  enemy_wins: {enemy_wins}\n"\
+           +f"  draws: {draws}", flush=True)
 
     return model_wins, enemy_wins, draws
 
-def allToAllTest(models, names=None, rounds=2, verbosity=0, map_funcs=None):
+def testAgainstPlayerParallelProcess(model_file, enemy_model_file, rounds, verbosity, map_func, model_file_lock, produced_data_lock, produced_data_dict, model_name, enemy_name):
+    # Initialize random seed
+    seed()
+
+    # Add random delay to avoid all processes accessing resources at the same time
+    time.sleep(random()*10)
+
+    storage = ModelStorage()
+
+    with model_file_lock:
+        model       = storage.loadModel(model_file)
+        enemy_model = storage.loadModel(enemy_model_file)
+    enemy_player = TTTPlayerCNN(enemy_model, map_func, 1)
+
+    m_wins, e_wins, draws = testAgainstPlayer(model, enemy_player, rounds, verbosity, map_func)
+
+    with produced_data_lock:
+        produced_data_dict[model_name][enemy_name] = m_wins
+        produced_data_dict[enemy_name][model_name] = e_wins
+
+def allToAllTest(model_files, names=None, rounds=2, threads_num=1, verbosity=0, map_funcs=None):
     if (names == None):
-        names = [str(i) for i in range(len(models))]
+        names = [str(i) for i in range(len(model_files))]
 
     if (map_funcs == None):
-        map_funcs = [mapToCnnInput for _ in models]
+        map_funcs = [mapToCnnInput for _ in model_files]
 
-    results_list = [[0 for _ in range(len(models))] for _ in range(len(models))]
-    results_dict = {n0:{n1:0 for n1 in names} for n0 in names}
+    # Clear abort file
+    if (os.path.exists(abort_file)):
+        os.remove(abort_file)
 
-    for i,mi in enumerate(models):
-        enemy_player = TTTPlayerCNN(mi, map_funcs[i], 1)
+    multiprocessing.set_start_method("spawn", force=True)
+    manager = multiprocessing.Manager()
+    model_file_lock = multiprocessing.Lock()
+    produced_data_lock = multiprocessing.Lock()
+    produced_data_dict = manager.dict()
+    produced_data_dict.update({n0:manager.dict({n1:0 for n1 in names}) for n0 in names})
+
+    producer_processes_awaiting = {n0:{n1:None for n1 in names} for n0 in names}
+    producer_processes_started  = {}
+
+    # Create testing processes
+    for i,mi in enumerate(model_files):
         ni = names[i]
-        results_list[i][i]   = "X"
-        results_dict[ni][ni] = "X"
-        for e in range(i+1, len(models)):
+        produced_data_dict[ni][ni] = "X"
+        for e in range(i+1, len(model_files)):
             ne = names[e]
-            me = models[e]
-            print(f"Player {e} {ne} against enemy {i} {ni}")
-            me_wins, mi_wins, draws = testAgainstPlayer(me, enemy_player, rounds, verbosity-1, map_funcs[e])
-            results_list[i][e]   += mi_wins
-            results_list[e][i]   += me_wins
-            results_dict[ne][ni] += me_wins
-            results_dict[ni][ne] += mi_wins
-            if (verbosity > 1):
-                input("...")
+            me = model_files[e]
+            p = multiprocessing.Process(target=funcAbortWrapper, args=(testAgainstPlayerParallelProcess, me, mi, rounds, verbosity-1, map_funcs[e], model_file_lock, produced_data_lock, produced_data_dict, ne, ni))
+            producer_processes_awaiting[ni][ne] = p
+
+    # Run processes in batches of threads_num at a time
+    while (len(producer_processes_awaiting)+len(producer_processes_started.keys()) > 0):
+        if (os.path.exists(abort_file)):
+            print(f"Aborting", flush=True)
+            return {}
+
+        while (len(producer_processes_started.keys()) < threads_num and len(producer_processes_awaiting) > 0):
+            ni = next(iter(producer_processes_awaiting))
+            ne = next(iter(producer_processes_awaiting[ni]))
+            p = producer_processes_awaiting[ni][ne]
+            del producer_processes_awaiting[ni][ne]
+            if (len(producer_processes_awaiting[ni]) == 0):
+                del producer_processes_awaiting[ni]
+            if (p == None):
+                continue
+            p.start()
+            producer_processes_started[(ni, ne)] = p
+            print(f"Started player {ne} against enemy {ni}")
+
+        pps = list(producer_processes_started.items())
+        for (ni, ne), p in pps:
+            if (not p.is_alive()):
+                p.join()
+                producer_processes_started.pop((ni, ne))
+                print(f"Finished player {ne} against enemy {ni}")
+
+        time.sleep(1)
+
+    results_dict = {}
+    results_dict.update(produced_data_dict)
 
     if (verbosity > 0):
         for k,v in results_dict.items():
@@ -412,23 +477,27 @@ def allToAllTest(models, names=None, rounds=2, verbosity=0, map_funcs=None):
             filtered_values = [x for x in v.values() if x != "X"]
             print(f"{k}: {sum(filtered_values)}")
 
-    return results_list, results_dict
+    return results_dict
 
-def testModelVersions(model_name, fractions=8, rounds=10):
+def testModelVersions(model_name, fractions=8, rounds=10, threads_num=1):
     storage = ModelStorage()
     model_files = [fn for fn in storage.getStorageList() if model_name in fn]
+
     indexes = set()
     for mi in range(fractions):
         indexes.add(mi*len(model_files)//fractions)
-    models = []
-    names = []
+    indexes.add(len(model_files)-1)
+    indexes = list(indexes)
+    indexes.sort()
+
+    model_files_selected = []
+    names_selected = []
     for mi in indexes:
-        models.append(storage.loadModel(model_files[mi]))
-        names.append(model_files[mi].split("_")[6])
-    models.append(storage.loadModel(model_files[-1]))
-    names.append(model_files[-1].split("_")[6])
-    print(names)
-    allToAllTest(models, names, rounds=rounds, verbosity=1)
+        model_files_selected.append(model_files[mi])
+        names_selected.append(model_files[mi].split("_")[6])
+    print(names_selected)
+
+    allToAllTest(model_files_selected, names_selected, rounds=rounds, threads_num=threads_num, verbosity=1)
 
 def testOnUser(model_name, user_player, rounds, verbosity=2):
     storage = ModelStorage()
@@ -514,7 +583,7 @@ if __name__ == "__main__":
 
     m_hero_4 = trainHero4(True, False, False)
 
-    #testModelVersions("hero_4", 6, 30)
+    #testModelVersions("hero_4", 6, 30, 4)
 
     #testOnUser("hero_4_16x16_18620", p_user, 4)
     #testOnUser("hero_4_16x16_11388", p_fred, 30, 1)
