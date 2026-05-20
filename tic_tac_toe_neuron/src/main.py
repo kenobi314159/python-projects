@@ -27,9 +27,10 @@ grid_size = 12
 win_strike_length = 5
 
 # Maximum number of training data for each training call
+# (influences memory consumption)
 MAX_TRAINING_DATA_SIZE = 1500
 # Maximum number of training data samples to keep
-MAX_TRAINING_DATA_KEPT = MAX_TRAINING_DATA_SIZE * 100
+MAX_TRAINING_DATA_KEPT = MAX_TRAINING_DATA_SIZE * 50
 
 # Abort file name
 # If this file is present in the working directory, the training will be stopped
@@ -510,12 +511,12 @@ def trainHero4(start_new, load_only=False, skip_training=False):
     model_name = f"hero_4_{model_grid_size}x{model_grid_size}"
 
     if (start_new):
-        depth = 1
+        depth = 3
         width = 4
         func0 = "elu"
         func1 = "tanh"
         func2 = "relu"
-        conv_layers = 3
+        conv_layers = 6
         learning_rate = 0.000001
         dense_sizes = [
             model_grid_size * model_grid_size * width,
@@ -553,7 +554,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             model_inputs_trained = model_inputs_trained,
             model_input_map_func = mapToCnnInput,
             max_training_data_size = MAX_TRAINING_DATA_KEPT,
-            train_interval = 60,
+            train_interval = 4*60,
             store_interval = 10*60,
             batch_size = 150,
             serial_rounds = 40,
@@ -563,7 +564,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             winner_weight = 10.0,
             loser_weight = 0.0,
             kept_models = 3,
-            player_training_variants = 40,
+            player_training_variants = 20,
             top_random_select_size = 0,
             weights_scale_coef = 3.0,
             fred_mistake_rate = 0.2,
@@ -583,9 +584,9 @@ if __name__ == "__main__":
 
     m_hero_4 = trainHero4(True, False, False)
 
-    #testModelVersions("hero_4", 6, 30, 4)
+    #testModelVersions("hero_4", 6, 40, 8)
 
-    #testOnUser("hero_4_16x16_18620", p_user, 4)
-    #testOnUser("hero_4_16x16_11388", p_fred, 30, 1)
+    #testOnUser("hero_4_16x16_44240", p_user, 4)
+    #testOnUser("hero_4_16x16_44240", p_fred, 30, 1)
 
     exit(0)
