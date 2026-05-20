@@ -52,6 +52,7 @@ At this moment, all the parameters need to be modified in the src/main.py file b
   - top_random_select_size - Number of highest model's output from which the actual desired turn is selected.
     This can be used to introduce some randomness into the model's decisions thus allowing to avoid local minimums in the training.
     For value 1, the model's highest output is always selected, leading to deterministic behavior.
+    For value 0, the turn is selected randomly from all non-zero options proportionally to the option's values, with higher values having higher chance to be selected.
   - weights_scale_coef - Scaling coefficient for the weights of the training data samples based on the remaining length of the game.
     This can be used to decrease the weight of training samples which are far from the end of the game, creating higher rewards for turns that are closer to the end of the game.
     For weights_scale_coef 0.0, all samples have the same weight coefficient 1.0.

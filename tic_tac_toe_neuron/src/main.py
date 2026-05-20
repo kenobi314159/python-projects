@@ -495,7 +495,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             loser_weight = 0.0,
             kept_models = 3,
             player_training_variants = 40,
-            top_random_select_size = 4,
+            top_random_select_size = 0,
             weights_scale_coef = 3.0,
             fred_mistake_rate = 0.2,
             test_runs = 50,

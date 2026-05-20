@@ -176,6 +176,47 @@ class TTTPlayerCNN:
         self.result_history = []
         self.turns_played = 0
 
+    def selectTopRandom(self, game_map, cnn_output, input_grid_size, map_variation):
+        if (self.top_random_select_size > 0):
+            # Find highest N values which don't point to
+            # an occupied field on the game map
+            top_select = [(0, 0, 0, 0, 0) for i in range(self.top_random_select_size)]
+            for game_x, game_y, cnn_output_x, cnn_output_y in cycleRelevantCoordinates(len(game_map), input_grid_size, map_variation):
+                v = float(cnn_output[cnn_output_y][cnn_output_x])
+                if (game_map[game_y][game_x] == 0 and v > top_select[0][4]):
+                    top_select[0] = (cnn_output_x, cnn_output_y, game_x, game_y, v)
+                    top_select.sort(key=lambda x: x[4])
+
+            # Select one of the top values randomly
+            result = top_select[randint(0, len(top_select)-1)]
+
+        else:
+            # Get all values which don't point to
+            # an occupied field on the game map sorted by value
+            all_select = []
+            for game_x, game_y, cnn_output_x, cnn_output_y in cycleRelevantCoordinates(len(game_map), input_grid_size, map_variation):
+                v = float(cnn_output[cnn_output_y][cnn_output_x])
+                if (game_map[game_y][game_x] == 0):
+                    all_select.append((cnn_output_x, cnn_output_y, game_x, game_y, v))
+            all_select.sort(key=lambda x: x[4])
+
+            # Select one of the values randomly
+            # with distribution proportional to their value (higher value -> higher chance to be selected)
+            sum_v = sum([x[4] for x in all_select])
+            if (sum_v > 0):
+                r = random() * sum_v
+                for s in all_select:
+                    r -= s[4]
+                    if (r <= 0):
+                        result = s
+                        break
+                result = result if r <= 0 else all_select[-1]
+            else:
+                # If all values are 0, select random field
+                result = all_select[randint(0, len(all_select)-1)]
+
+        return result
+
     def getNextTurn(self, game_map):
         all_empty = True
         for line in game_map:
@@ -211,22 +252,7 @@ class TTTPlayerCNN:
         #S += dataToStr(cnn_input[0])
         #S += dataToStr(cnn_output)
 
-        # Find highest values which don't point to
-        # an occupied field on the game map
-        max_v = None
-        empty_fields_cnt = 0
-        top_select = [(0, 0, 0, 0, 0) for i in range(self.top_random_select_size)]
-        for game_x, game_y, cnn_output_x, cnn_output_y in cycleRelevantCoordinates(len(game_map), input_grid_size, selected_variant):
-            v = float(cnn_output[cnn_output_y][cnn_output_x])
-            if (game_map[game_y][game_x] == 0 and v > top_select[0][4]):
-                max_v = v
-                top_select[0] = (cnn_output_x, cnn_output_y, game_x, game_y, max_v)
-                top_select.sort(key=lambda x: x[4])
-                #S += f"game_x: {game_x}, game_y: {game_y}, cnn_output_x: {cnn_output_x}, cnn_output_y: {cnn_output_y}, v: {v}\n"
-
-        # Select one of the top values randomly
-        result = top_select[randint(0, len(top_select)-1)]
-        cnn_output_x, cnn_output_y, game_x, game_y, max_v = result
+        cnn_output_x, cnn_output_y, game_x, game_y, max_v = self.selectTopRandom(game_map, cnn_output, input_grid_size, selected_variant)
 
         # Generate referential data for all variants with the same turn
         turn_index = self.turns_played-1
