@@ -139,7 +139,7 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
         if (use_winners and len(winners)):
             training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef)
             winners = winners[1:]
-        elif (len(losers)):
+        elif (use_losers and len(losers)):
             training_data = losers[0].getTrainingData(win_strike_length, False, weights_scale_coef)
             losers = losers[1:]
 
