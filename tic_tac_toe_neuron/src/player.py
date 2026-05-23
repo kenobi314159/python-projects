@@ -300,22 +300,27 @@ class TTTPlayerCNN:
 
         return game_x, game_y
 
-    def _getWeightData(self, win_strike_length, won, weights_scale_coef=0.0):
+    def _getWeightData(self, win_strike_length, won, weights_scale_coef=0.0, weights_scale_uniform=False):
         # For each turn, the weight is devided by the number of remaining turns in the game.
         # The largest weight (coefficient 1.0) is for the last turn.
         # Each turn before that has its weight lowered based on the weights_scale_coef.
         # For weights_scale_coef = 0.0, all turns have weight 1.0.
         # For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
         # For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
+        # For weights_scale_uniform==True, all turns are weighted the same as the first turn (a long play gets lower weight
+        # than short play).
         target_weight = self.winner_weight if won else self.loser_weight
         steps = self.turns_played
         weight_data = [[target_weight] for i in range(len(self.result_history))]
 
         if (weights_scale_coef > 0.0):
             reverted_coef = 1.0 / weights_scale_coef
+            turn = self.result_history[0][0]
+            turns_remaining = steps - turn
             for i,r in enumerate(self.result_history):
-                turn,_ = r
-                turns_remaining = steps - turn
+                if (not weights_scale_uniform):
+                    turn = r[0]
+                    turns_remaining = steps - turn
                 weight_data[i][0] = target_weight / (turns_remaining ** reverted_coef)
 
         return tf.constant(weight_data, dtype=tf.float32)
@@ -341,9 +346,9 @@ class TTTPlayerCNN:
             ref_output_data.append(exp_output)
         return tf.constant(ref_output_data, dtype=tf.float32)
 
-    def getTrainingData(self, win_strike_length, won=True, weights_scale_coef=0.0):
+    def getTrainingData(self, win_strike_length, won=True, weights_scale_coef=0.0, weights_scale_uniform=False):
         input_data      = self.cnn_input_history
-        weight_data     = self._getWeightData(win_strike_length, won, weights_scale_coef)
+        weight_data     = self._getWeightData(win_strike_length, won, weights_scale_coef, weights_scale_uniform)
         ref_output_data = self._getRefOutputData(won)
         #if (randint(0, 30) == 0):
         #    S = ""

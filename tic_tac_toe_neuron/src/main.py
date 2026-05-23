@@ -65,7 +65,7 @@ def cutOffShortest(players, cutoff):
     shortest = turns_sorted[cutoff]
     return [p for p in players if len(p.cnn_input_history) <= shortest]
 
-def generateTrainingData(model_file, model_input_map_func, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, weights_scale_coef, train_against_top_random_select_1):
+def generateTrainingData(model_file, model_input_map_func, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1):
     use_winners = winner_weight > 0
     use_losers = loser_weight > 0
     assert (use_winners or use_losers), "At least one of winner_weight or loser_weight must be over 0.0."
@@ -137,16 +137,16 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
 
         # Get training data
         if (use_winners and len(winners)):
-            training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef)
+            training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform)
             winners = winners[1:]
         elif (use_losers and len(losers)):
-            training_data = losers[0].getTrainingData(win_strike_length, False, weights_scale_coef)
+            training_data = losers[0].getTrainingData(win_strike_length, False, weights_scale_coef, weights_scale_uniform)
             losers = losers[1:]
 
         for winner in winners:
-            training_data = training_data.concat(winner.getTrainingData(win_strike_length, True, weights_scale_coef))
+            training_data = training_data.concat(winner.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
         for loser in losers:
-            training_data = training_data.concat( loser.getTrainingData(win_strike_length, False, weights_scale_coef))
+            training_data = training_data.concat( loser.getTrainingData(win_strike_length, False, weights_scale_coef, weights_scale_uniform))
 
         # Append to output list
         with produced_data_lock:
@@ -288,7 +288,7 @@ def testModel(model_file, model_input_map_func, model_name, model_file_lock, fre
 
     print(f"Model testing {multiprocessing.current_process().name} finished", flush=True)
 
-def train(model, model_name, model_games, model_inputs_trained, model_input_map_func, max_training_data_size, train_interval, store_interval, batch_size, serial_rounds, threads_num, use_testing_thread=False, shortest_cutoff=0, winner_weight=1.0, loser_weight=1.0, kept_models=5, player_training_variants=None, top_random_select_size=1, weights_scale_coef=0.0, fred_mistake_rate=0.0, test_runs=100, train_against_top_random_select_1=False):
+def train(model, model_name, model_games, model_inputs_trained, model_input_map_func, max_training_data_size, train_interval, store_interval, batch_size, serial_rounds, threads_num, use_testing_thread=False, shortest_cutoff=0, winner_weight=1.0, loser_weight=1.0, kept_models=5, player_training_variants=None, top_random_select_size=1, weights_scale_coef=0.0, weights_scale_uniform=False, fred_mistake_rate=0.0, test_runs=100, train_against_top_random_select_1=False):
     assert (threads_num >= 2 + int(use_testing_thread)), f"At least {2 + int(use_testing_thread)} threads are required for the training."
     tmp_model_file = "tmp"
     num_producers = threads_num - 1
@@ -314,7 +314,7 @@ def train(model, model_name, model_games, model_inputs_trained, model_input_map_
     # Create producer processes
     producer_processes = []
     for i in range(num_producers):
-        p = multiprocessing.Process(target=funcAbortWrapper, args=(generateTrainingData, tmp_model_file, model_input_map_func, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, weights_scale_coef, train_against_top_random_select_1))
+        p = multiprocessing.Process(target=funcAbortWrapper, args=(generateTrainingData, tmp_model_file, model_input_map_func, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1))
         producer_processes.append(p)
         p.start()
     
@@ -567,6 +567,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             player_training_variants = 20,
             top_random_select_size = 0,
             weights_scale_coef = 3.0,
+            weights_scale_uniform = False,
             fred_mistake_rate = 0.2,
             test_runs = 50,
             train_against_top_random_select_1 = True

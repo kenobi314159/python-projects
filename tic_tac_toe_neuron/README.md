@@ -60,6 +60,9 @@ At this moment, all the parameters need to be modified in the src/main.py file b
     For weights_scale_coef over 1.0, the scaling goes down slower and slower.
     For example, for weights_scale_coef 4.0, it takes 16 turns to get down to coefficient 1/2.
     For weights_scale_coef 5.0, it takes 32 turns.
+  - weights_scale_uniform - When set to True, switches the weights scaling to uniform across all turns in one game.
+    The weight is then based on the above calculation made only for the first turn.
+    This leads to shorted games having overall higher weight than longer games creatng incentive to finish the game faster.
   - fred_mistake_rate - Rate of mistakes made by the testing player Fred.
     This allows to monitor improvements of the model even at stages when it is still very bad.
   - test_runs - Number of runs made by testing process before printing results.
