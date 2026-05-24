@@ -126,20 +126,19 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
         # Cut off to only get players with the shortest histories (fastest win/lose)
         len_prev = len(winners)
         winners = cutOffShortest(winners, shortest_cutoff)
-        stat_cutoff = len_prev - len(winners)
+        stat_winners = len(winners)
+        stat_cutoff = len_prev - stat_winners
 
         len_prev = len(losers)
         losers = cutOffShortest(losers, shortest_cutoff)
-        stat_cutoff += len_prev - len(losers)
-
-        if (use_losers and len(losers)):
-            stat_cutoff //= 2
+        stat_losers = len(losers)
+        stat_cutoff += len_prev - stat_losers
 
         # Get training data
-        if (use_winners and len(winners)):
+        if (len(winners)):
             training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform)
             winners = winners[1:]
-        elif (use_losers and len(losers)):
+        elif (len(losers)):
             training_data = losers[0].getTrainingData(win_strike_length, False, weights_scale_coef, weights_scale_uniform)
             losers = losers[1:]
 
@@ -150,7 +149,7 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
 
         # Append to output list
         with produced_data_lock:
-            produced_data_list.append((training_data, stat_turns, stat_cutoff))
+            produced_data_list.append((training_data, stat_turns, stat_cutoff, stat_winners, stat_losers))
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
@@ -194,8 +193,10 @@ def trainModel(model_file, model_name, model_games, model_inputs_trained, max_tr
         new_data_size = sum([len(pd[0].input_data) for pd in pdl])
 
         # Concatenate statistics
-        stat_turns  = sum([pd[1] for pd in pdl], [])
-        stat_cutoff = sum([pd[2] for pd in pdl])
+        stat_turns   = sum([pd[1] for pd in pdl], [])
+        stat_cutoff  = sum([pd[2] for pd in pdl])
+        stat_winners = sum([pd[3] for pd in pdl])
+        stat_losers  = sum([pd[4] for pd in pdl])
 
         # Concatenate training data
         if (training_data == None):
@@ -208,18 +209,16 @@ def trainModel(model_file, model_name, model_games, model_inputs_trained, max_tr
         training_data = training_data.truncate(max_training_data_size)
 
         # Calculate and print statistics
-        stat_history.append((last_stat_time, len(stat_turns), sum(stat_turns), min(stat_turns), max(stat_turns), stat_cutoff))
-        if (len(stat_history) > 4):
-            stat_history = stat_history[-4:]
-        stat_games = sum([sh[1] for sh in stat_history])
-        stat_avg_turns = sum([sh[2] for sh in stat_history]) / stat_games
-        stat_min_turns = min([sh[3] for sh in stat_history])
-        stat_max_turns = max([sh[4] for sh in stat_history])
+        stat_games     = len(stat_turns)
+        stat_avg_turns = sum(stat_turns) / stat_games
+        stat_min_turns = min(stat_turns)
+        stat_max_turns = max(stat_turns)
         time_passed = t - last_stat_time
         last_stat_time = t
-        games_per_sec = stat_games / (t - stat_history[0][0] )
-        stat_cutoff_perc = 100 * sum([sh[5] for sh in stat_history]) / stat_games
-        print(f"Time passed: {time_passed:.2f} s, Games: {len(stat_turns):4}, Cut off games: {stat_cutoff:4} ({stat_cutoff_perc:.2f}%), Avg turns: {stat_avg_turns:.2f}, Min turns: {stat_min_turns}, Max turns: {stat_max_turns}, Games/sec: {games_per_sec:5.2f}, New data size: {new_data_size}, Training data size: {len(training_data.input_data)}", flush=True)
+        games_per_sec = stat_games / time_passed
+        winners_losers_total = stat_cutoff + stat_winners + stat_losers
+        stat_cutoff_perc = 100 * stat_cutoff / winners_losers_total if winners_losers_total > 0 else 0
+        print(f"   Time passed: {time_passed:.2f} s, Games: {len(stat_turns):3}, Winners: {stat_winners:3}, Losers: {stat_losers:3}, Cut off winners/losers: {stat_cutoff:3} ({stat_cutoff_perc:.2f}%)\n   Avg turns: {stat_avg_turns:.2f}, Min turns: {stat_min_turns}, Max turns: {stat_max_turns}, Games/sec: {games_per_sec:5.2f}, New data size: {new_data_size}, Training data size: {len(training_data.input_data)}", flush=True)
 
         # Train model
         training_data.trainModel(model, batch_size, 1, MAX_TRAINING_DATA_SIZE)
