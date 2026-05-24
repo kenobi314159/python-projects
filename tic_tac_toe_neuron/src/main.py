@@ -55,15 +55,22 @@ def funcAbortWrapper(func, *args, **kwargs):
         raise
 
 def cutOffShortest(players, cutoff):
-    if (cutoff == 0):
+    if (len(players) == 0):
         return players
+
     # Leave only players with the shortest 'cutoff' histories appearing in the set
-    turns = {len(p.cnn_input_history) for p in players}
+    turns = {p.turns_played for p in players}
     turns_sorted = sorted(list(turns))
-    if (cutoff >= len(turns_sorted)):
-        return players
-    shortest = turns_sorted[cutoff]
-    return [p for p in players if len(p.cnn_input_history) <= shortest]
+    if (cutoff > len(turns_sorted) or cutoff == 0):
+        cutoff = len(turns_sorted)
+
+    shortest = turns_sorted[cutoff-1]
+
+    result = []
+    for p in players:
+        if (p.turns_played <= shortest):
+            result.append(p)
+    return result
 
 def generateTrainingData(model_file, model_input_map_func, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1):
     use_winners = winner_weight > 0
