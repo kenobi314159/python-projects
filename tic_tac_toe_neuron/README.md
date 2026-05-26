@@ -44,6 +44,9 @@ At this moment, all the parameters need to be modified in the src/main.py file b
     (Rounds that finished faster may be considered higher-quality training data.)
   - winner_weight - Weight of the training data samples where the model won the game.
   - loser_weight - Weight of the training data samples where the model lost the game.
+  - learning_rate - Learning rate for the training process.
+    Higher learning rate may lead to faster training, but also to more unstable training and worse final results.
+    Lower learning rate may lead to more stable training and better final results, but also to much longer training time.
   - kept_models - Number of latest model iterations that are used for generating training data.
     Using multiple different versions may lead to higher variations of data and avoiding local minimums in the training.
   - player_training_variants - Number of training samples generated from each turn of each game.

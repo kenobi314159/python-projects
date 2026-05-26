@@ -5,7 +5,7 @@ from tensorflow.keras.layers import Conv3D, MaxPooling2D, Flatten, Dense, Reshap
 from tensorflow.keras.losses import CategoricalCrossentropy
 from random import randint
 
-def createCnnModel(input_grid_size, output_grid_size, conv_layers=64, dense_sizes=None, conv_activation="linear", mid_activations=["relu", "relu", "relu", "relu"], out_activation="softmax", input_grids=1, learning_rate=0.0001):
+def createCnnModel(input_grid_size, output_grid_size, conv_layers=64, dense_sizes=None, conv_activation="linear", mid_activations=["relu", "relu", "relu", "relu"], out_activation="softmax", input_grids=1):
     """
     Defines a simple CNN model.
     """
@@ -39,7 +39,7 @@ def createCnnModel(input_grid_size, output_grid_size, conv_layers=64, dense_size
     ]
 
     model = Sequential(layers)
-    model.compile(optimizer=Adam(learning_rate=learning_rate), loss=CategoricalCrossentropy(from_logits=False), weighted_metrics=["categorical_crossentropy"])
+    model.compile(optimizer=Adam(learning_rate=0.00001), loss=CategoricalCrossentropy(from_logits=False), weighted_metrics=["categorical_crossentropy"])
 
     #print(model.summary())
 
@@ -144,3 +144,4 @@ class trainingData:
             model.fit(self.input_data[i:i+max_data_size], self.ref_output_data[i:i+max_data_size], sample_weight=self.weight_data[i:i+max_data_size], epochs=epochs, batch_size=batch_size, verbose=0, validation_split=0.0, shuffle=True, use_multiprocessing=True, workers=8)
         result = model.get_metrics_result()
         print(f"Training result: loss: {float(result['loss']):.2f}, categorical_accuracy: {float(result['categorical_crossentropy']):.2f}")
+        assert (not tf.math.is_nan(result["loss"])), "Loss is NaN! Training failed most probably due to too high learning rate or too big batch size. Try to decrease them and train again."

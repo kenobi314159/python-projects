@@ -160,11 +160,14 @@ def generateTrainingData(model_file, model_input_map_func, serial_rounds, shorte
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
-def trainModel(model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models):
+def trainModel(model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate):
     print(f"Model training {multiprocessing.current_process().name} started", flush=True)
     # Load initial model
     with model_file_lock:
         model = tf.keras.models.load_model(f"{model_file}0.keras")
+
+    # Set model optimizer learning rate
+    model.optimizer.learning_rate.assign(learning_rate)
 
     training_data = None
     last_store_time = time.time()
@@ -294,7 +297,7 @@ def testModel(model_file, model_input_map_func, model_name, model_file_lock, fre
 
     print(f"Model testing {multiprocessing.current_process().name} finished", flush=True)
 
-def train(model, model_name, model_games, model_inputs_trained, model_input_map_func, max_training_data_size, train_interval, store_interval, batch_size, serial_rounds, threads_num, use_testing_thread=False, shortest_cutoff=0, winner_weight=1.0, loser_weight=1.0, kept_models=5, player_training_variants=None, top_random_select_size=1, weights_scale_coef=0.0, weights_scale_uniform=False, fred_mistake_rate=0.0, test_runs=100, train_against_top_random_select_1=False):
+def train(model, model_name, model_games, model_inputs_trained, model_input_map_func, max_training_data_size, train_interval, store_interval, batch_size, serial_rounds, threads_num, use_testing_thread=False, shortest_cutoff=0, winner_weight=1.0, loser_weight=1.0, learning_rate=0.00001, kept_models=5, player_training_variants=None, top_random_select_size=1, weights_scale_coef=0.0, weights_scale_uniform=False, fred_mistake_rate=0.0, test_runs=100, train_against_top_random_select_1=False):
     assert (threads_num >= 2 + int(use_testing_thread)), f"At least {2 + int(use_testing_thread)} threads are required for the training."
     tmp_model_file = "tmp"
     num_producers = threads_num - 1
@@ -325,7 +328,7 @@ def train(model, model_name, model_games, model_inputs_trained, model_input_map_
         p.start()
     
     # Create consumer process
-    consumer_process = multiprocessing.Process(target=funcAbortWrapper, args=(trainModel, tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models))
+    consumer_process = multiprocessing.Process(target=funcAbortWrapper, args=(trainModel, tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate))
     consumer_process.start()
 
     if (use_testing_thread):
@@ -517,13 +520,12 @@ def trainHero4(start_new, load_only=False, skip_training=False):
     model_name = f"hero_4_{model_grid_size}x{model_grid_size}"
 
     if (start_new):
+        conv_layers = 5
         depth = 3
         width = 4
         func0 = "elu"
         func1 = "tanh"
         func2 = "relu"
-        conv_layers = 6
-        learning_rate = 0.000001
         dense_sizes = [
             model_grid_size * model_grid_size * width,
         ] * depth
@@ -537,7 +539,6 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             mid_activations=mid_activations,
             out_activation="softmax",
             input_grids=width,
-            learning_rate=learning_rate
         )
         model_games = 0
         model_inputs_trained = 0
@@ -569,6 +570,7 @@ def trainHero4(start_new, load_only=False, skip_training=False):
             shortest_cutoff = 0,
             winner_weight = 10.0,
             loser_weight = 0.0,
+            learning_rate = 0.001,
             kept_models = 3,
             player_training_variants = 20,
             top_random_select_size = 0,
