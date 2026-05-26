@@ -293,7 +293,7 @@ def testModel(model_file, model_input_map_func, model_name, model_file_lock, fre
             if (os.path.exists(abort_file) or os.path.exists(pause_file)):
                 break
 
-        print(f"Testing result: ==== {model_wins} wins, {enemy_wins} losses, {draws} draws ====", flush=True)
+        print(f"              ======== {model_wins} wins, {enemy_wins} losses, {draws} draws ========", flush=True)
 
     print(f"Model testing {multiprocessing.current_process().name} finished", flush=True)
 
