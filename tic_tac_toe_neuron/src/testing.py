@@ -175,7 +175,7 @@ def allToAllTestParallel(model_files, model_names=None, rounds=2, threads_num=1,
 
 # Test different version of model against each other
 # Selects given number of samples of model versions (with last and first versions always included) and runs all-against-all testing on them
-def testModelVersions(model_name, samples=8, rounds=10, threads_num=1, names_extraction_func=lambda x: x.split("_")[6], verbosity=1):
+def testModelVersions(model_name, samples=8, rounds=10, threads_num=1, names_extraction_func=lambda x: x.split("_")[5], verbosity=1):
     assert (samples >= 2), "At least 2 samples must be selected to enable testing"
 
     storage = ModelStorage()
@@ -205,5 +205,5 @@ def testAgainstUser(model_name, user_player, rounds, verbosity=2):
     model_files = [fn for fn in storage.getStorageList() if model_name in fn]
     model  = storage.loadModel(model_files[-1])
     player = TTTPlayerCNN(model, 1)
-    testAgainstUser(player, user_player, rounds, verbosity=verbosity)
+    testAgainstPlayer(player, user_player, rounds, verbosity=verbosity)
 

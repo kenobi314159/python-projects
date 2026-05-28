@@ -116,6 +116,8 @@ def generateTrainingDataProcess(
         stat_losers = len(losers)
         stat_cutoff += len_prev - stat_losers
 
+        training_data = None
+
         # Get training data
         if (len(winners)):
             training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform)
@@ -129,9 +131,10 @@ def generateTrainingDataProcess(
         for loser in losers:
             training_data = training_data.concat( loser.getTrainingData(win_strike_length, False, weights_scale_coef, weights_scale_uniform))
 
-        # Append to output list
-        with produced_data_lock:
-            produced_data_list.append((training_data, stat_turns, stat_cutoff, stat_winners, stat_losers))
+        if (training_data != None):
+            # Append to output list
+            with produced_data_lock:
+                produced_data_list.append((training_data, stat_turns, stat_cutoff, stat_winners, stat_losers))
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
@@ -235,7 +238,7 @@ def trainModelProcess(
             model.save(f"{model_file}0.keras")
 
         # Save model for storage
-        model_games += len(stat_games)
+        model_games += stat_games
         model_inputs_trained += len(training_data.input_data)
         if (t - last_store_time > store_interval):
             print(f"Storing model {model_name}_{model_games}_{model_inputs_trained}", flush=True)
