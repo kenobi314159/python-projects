@@ -87,6 +87,8 @@ def generateTrainingDataProcess(
             switched = randint(0,1)
             if (switched):
                 pp = [p1, p0]
+            pp[0].plays_first = True
+            pp[1].plays_first = False
             ttt_play = TicTacToePlay(grid_size, grid_size, *pp, win_strike_length)
             result = ttt_play.play(0)
             stat_turns.append(p0.turns_played + p1.turns_played)
@@ -106,37 +108,79 @@ def generateTrainingDataProcess(
                 break
 
         # Cut off to only get players with the shortest histories (fastest win/lose)
-        len_prev = len(winners)
+        len_prev_win = len(winners)
         winners = cutOffShortest(winners, shortest_cutoff)
-        stat_winners = len(winners)
-        stat_cutoff = len_prev - stat_winners
 
-        len_prev = len(losers)
+        len_prev_lose = len(losers)
         losers = cutOffShortest(losers, shortest_cutoff)
-        stat_losers = len(losers)
-        stat_cutoff += len_prev - stat_losers
-
-        training_data = None
 
         # Get training data
-        if (len(winners)):
-            training_data = winners[0].getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform)
-            winners = winners[1:]
-        elif (len(losers)):
-            training_data = losers[0].getTrainingData(win_strike_length, False, weights_scale_coef, weights_scale_uniform)
-            losers = losers[1:]
+        training_data_list = getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform)
 
-        for winner in winners:
-            training_data = training_data.concat(winner.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
-        for loser in losers:
-            training_data = training_data.concat( loser.getTrainingData(win_strike_length, False, weights_scale_coef, weights_scale_uniform))
+        stat_winners = len(winners)
+        stat_losers  = len(losers)
+        stat_cutoff += len_prev_win - stat_winners
+        stat_cutoff += len_prev_lose - stat_losers
 
-        if (training_data != None):
+        if (len(training_data_list)):
+            training_data = training_data_list[0]
+            for td in training_data_list[1:]:
+                training_data = training_data.concat(td)
+
             # Append to output list
             with produced_data_lock:
                 produced_data_list.append((training_data, stat_turns, stat_cutoff, stat_winners, stat_losers))
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
+
+# Gets training data from the winners and losers, applies weights scaling if needed, and concatenates it into a single list
+def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform):
+    training_data_list_win  = []
+    training_data_list_lose = []
+    for winner in winners:
+        training_data_list_win.append(winner.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
+    for loser in losers:
+        training_data_list_lose.append(loser.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
+
+    normalizeTrainingDataWeights(training_data_list_win , winners)
+    normalizeTrainingDataWeights(training_data_list_lose, losers )
+
+    return training_data_list_win + training_data_list_lose
+
+# Modify training data weights so that the combined weight of games played as first player
+# is the same as the combined weight of games played as second player, to avoid overtraining for only one of the roles.
+def normalizeTrainingDataWeights(training_data_list, players):
+    assert (len(training_data_list) == len(players)), "The number of training data items must be the same as the number of players for weight normalization."
+    if (len(training_data_list) == 0):
+        return
+
+    #S = "Normalizing training data weights:\n"
+    #S += f"  Weights 0 original: {[float(x[0]) for x in training_data_list[0].weight_data]}\n"
+
+    games_num = len(players)
+    games_played_first_num = sum([1 for p in players if (p.plays_first)])
+
+    played_second_weight = games_played_first_num / games_num
+    played_first_weight  = 1 - played_second_weight
+
+    #S += f"  Total games: {games_num}, played first: {games_played_first_num} ({played_first_weight:.2f}), played second: {games_num - games_played_first_num} ({played_second_weight:.2f})\n"
+
+    if (played_first_weight == 0 or played_second_weight == 0):
+        # There is only one type of data present, that will have weight 0.
+        # There is no point in training on this, so remove all the data instead.
+        training_data_list.clear()
+        players.clear()
+        #S += "  Clearing.\n"
+        #print(S)
+        return
+
+    for td, p in zip(training_data_list, players):
+        coef = played_first_weight if (p.plays_first) else played_second_weight
+        td_w_float = [[float(w[0]) * coef] for w in td.weight_data]
+        td.weight_data = tf.constant(td_w_float, dtype=tf.float32)
+
+    #S += f"  Weights 1 modified: {[float(x[0]) for x in training_data_list[0].weight_data]}\n"
+    #print(S)
 
 # Process for training the model
 # Periodically loads the latest model, checks for new training data, trains the model on it,
@@ -330,7 +374,7 @@ def train(
     ):
     assert (threads_num >= 2 + int(use_testing_thread)), f"At least {2 + int(use_testing_thread)} threads are required for the training."
     tmp_model_file = "tmp"
-    num_producers = threads_num - 1
+    num_producers = threads_num - 1 - int(use_testing_thread)
     multiprocessing.set_start_method("spawn", force=True)
     manager = multiprocessing.Manager()
     model_file_lock = multiprocessing.Lock()

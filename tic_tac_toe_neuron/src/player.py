@@ -164,20 +164,21 @@ class TTTPlayerCNN:
             self.pad_start_y = 0
             self.cnn_input = None
 
-    def __init__(self, cnn_model, training_variants=None, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1):
+    def __init__(self, cnn_model, training_variants=None, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1, plays_first=None):
         self.cnn_model = cnn_model
         self.input_transform_func = mapToCnnInput
         self.training_variants = training_variants
         self.winner_weight = winner_wight
         self.loser_weight = loser_weight
         self.top_random_select_size = top_random_select_size
+        self.plays_first = plays_first
         self.random_player = TTTPlayerRandom()
         self.cnn_input_history = tf.constant([], shape=[0] + list(self.cnn_model.input_shape[1:]),dtype=tf.int32)
         self.result_history = []
         self.turns_played = 0
 
     def copy(self):
-        new_player = TTTPlayerCNN(self.cnn_model, self.training_variants, self.winner_weight, self.loser_weight, self.top_random_select_size)
+        new_player = TTTPlayerCNN(self.cnn_model, self.training_variants, self.winner_weight, self.loser_weight, self.top_random_select_size, self.plays_first)
         new_player.cnn_input_history = tf.identity(self.cnn_input_history)
         new_player.result_history = list(self.result_history)
         new_player.turns_played = self.turns_played
