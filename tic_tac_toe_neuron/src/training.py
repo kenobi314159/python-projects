@@ -44,6 +44,7 @@ def generateTrainingDataProcess(
     kept_models,
     player_training_variants,
     top_random_select_size,
+    top_select_equal,
     weights_scale_coef,
     weights_scale_uniform,
     train_against_top_random_select_1
@@ -81,8 +82,8 @@ def generateTrainingDataProcess(
         p1_top_random_select_size = 1 if train_against_top_random_select_1 else top_random_select_size
         use_p1_result = (not train_against_top_random_select_1)
         for _ in range(serial_rounds):
-            p0 = TTTPlayerCNN(model_trained, player_training_variants, winner_weight, loser_weight, top_random_select_size)
-            p1 = TTTPlayerCNN(model_other  , player_training_variants, winner_weight, loser_weight, p1_top_random_select_size)
+            p0 = TTTPlayerCNN(model_trained, player_training_variants, winner_weight, loser_weight, top_random_select_size, top_select_equal)
+            p1 = TTTPlayerCNN(model_other  , player_training_variants, winner_weight, loser_weight, p1_top_random_select_size, top_select_equal)
             pp = [p0, p1]
             switched = randint(0,1)
             if (switched):
@@ -366,6 +367,7 @@ def train(
     kept_models=5,
     player_training_variants=None,
     top_random_select_size=1,
+    top_select_equal=False,
     weights_scale_coef=0.0,
     weights_scale_uniform=False,
     fred_mistake_rate=0.0,
@@ -395,7 +397,7 @@ def train(
     producer_processes = []
     for i in range(num_producers):
         p = multiprocessing.Process(target=funcAbortWrapper, args=(generateTrainingDataProcess,
-            tmp_model_file, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1))
+            tmp_model_file, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, top_select_equal, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1))
         producer_processes.append(p)
         p.start()
     

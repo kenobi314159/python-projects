@@ -164,13 +164,14 @@ class TTTPlayerCNN:
             self.pad_start_y = 0
             self.cnn_input = None
 
-    def __init__(self, cnn_model, training_variants=None, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1, plays_first=None):
+    def __init__(self, cnn_model, training_variants=None, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1, top_select_equal=False, plays_first=None):
         self.cnn_model = cnn_model
         self.input_transform_func = mapToCnnInput
         self.training_variants = training_variants
         self.winner_weight = winner_wight
         self.loser_weight = loser_weight
         self.top_random_select_size = top_random_select_size
+        self.top_select_equal = top_select_equal
         self.plays_first = plays_first
         self.random_player = TTTPlayerRandom()
         self.cnn_input_history = tf.constant([], shape=[0] + list(self.cnn_model.input_shape[1:]),dtype=tf.int32)
@@ -178,7 +179,7 @@ class TTTPlayerCNN:
         self.turns_played = 0
 
     def copy(self):
-        new_player = TTTPlayerCNN(self.cnn_model, self.training_variants, self.winner_weight, self.loser_weight, self.top_random_select_size, self.plays_first)
+        new_player = TTTPlayerCNN(self.cnn_model, self.training_variants, self.winner_weight, self.loser_weight, self.top_random_select_size, self.top_select_equal, self.plays_first)
         new_player.cnn_input_history = tf.identity(self.cnn_input_history)
         new_player.result_history = list(self.result_history)
         new_player.turns_played = self.turns_played
@@ -204,7 +205,7 @@ class TTTPlayerCNN:
         # Select one of the values randomly
         # with distribution proportional to their value (higher value -> higher chance to be selected)
         sum_v = sum([x[4] for x in selected_next_turns])
-        if (sum_v > 0):
+        if (sum_v > 0 and (not self.top_select_equal)):
             r = random() * sum_v
             for s in selected_next_turns:
                 r -= s[4]
@@ -213,7 +214,7 @@ class TTTPlayerCNN:
                     break
             result = result if r <= 0 else selected_next_turns[-1]
         else:
-            # If all values are 0, select random field
+            # If all values are 0 or top_select_equal is set, select random field with equal probability
             result = selected_next_turns[randint(0, len(selected_next_turns)-1)]
 
         return result

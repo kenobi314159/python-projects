@@ -57,6 +57,8 @@ At this moment, all the parameters need to be modified in the src/main.py file b
     The random selection is weighted by the value of each potential outputs, so higher values have higher chance to be selected.
     For value 1, the model's highest output is always selected, leading to deterministic behavior.
     For value 0, the weighted random selection is done from all outputs.
+  - top_select_equal - When set to True, the top_random_select_size selection is done with equal probability instead of weighted by the output values.
+    This can be used to increase randomness of the model's decisions even more.
   - weights_scale_coef - Scaling coefficient for the weights of the training data samples based on the remaining length of the game.
     This can be used to decrease the weight of training samples which are far from the end of the game, creating higher rewards for turns that are closer to the end of the game.
     For weights_scale_coef 0.0, all samples have the same weight coefficient 1.0.
