@@ -36,7 +36,8 @@ def trainCustomModel0(
     loser_weight=0.0,
     learning_rate=0.0001,
     player_training_variants=20,
-    top_tandom_select_size=0,
+    top_random_select_size=0,
+    top_select_equal=True,
     weights_scale_coef=1.0,
     weights_scale_uniform=False,
     train_against_best = True,
@@ -105,7 +106,8 @@ def trainCustomModel0(
         learning_rate = learning_rate,
         kept_models = 3,
         player_training_variants = player_training_variants,
-        top_random_select_size = top_tandom_select_size,
+        top_random_select_size = top_random_select_size,
+        top_select_equal = top_select_equal,
         weights_scale_coef = weights_scale_coef,
         weights_scale_uniform = weights_scale_uniform,
         train_against_top_random_select_1 = train_against_best,
@@ -161,6 +163,12 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
+    #p_user = TTTPlayerUser("User")
+    #p_fred = TTTPlayerFred(0.2)
+    #testAgainstUser("model-t6_16x16_33640", p_user, 4)
+    #testAgainstUser("hero_4_16x16_44240", p_fred, 30, 1)
+    #exit(0)
+
     if (args.test_versions):
         name             =     args.test_versions[0]
         versions_num     = int(args.test_versions[1])
@@ -170,32 +178,32 @@ if __name__ == "__main__":
         exit(0)
 
     trainCustomModel0(
-        name=args.model_name,
-        conv_layers=args.conv_layers,
-        dense_layers=args.dense_layers,
-        max_training_data_size=args.max_training_data_size,
-        train_interval=args.train_interval,
-        serial_rounds=args.serial_rounds,
-        threads_num=args.threads_num,
-        shortest_cutoff=args.shortest_cutoff,
-        winner_weight=args.winner_weight,
-        loser_weight=args.loser_weight,
-        learning_rate=args.learning_rate,
-        player_training_variants=args.player_training_variants,
-        top_tandom_select_size=args.top_tandom_select_size,
-        weights_scale_coef=args.weights_scale_coef,
-        weights_scale_uniform=args.weights_scale_uniform,
-        train_against_best = args.train_against_best,
-        fred_mistake_rate = args.fred_mistake_rate,
-        test_runs = args.test_runs,
-        start_new = args.start_new,
+    name="model-t8-1",
+    conv_layers=5,
+    dense_layers=3,
+
+    max_training_data_size=60,
+    train_interval=20*60,
+    serial_rounds=40,
+    threads_num=8,
+    shortest_cutoff=0,
+    winner_weight=1.0,
+    loser_weight=0.0,
+    learning_rate=0.000001,
+    player_training_variants=120,
+    top_random_select_size=10,
+    top_select_equal=True,
+    weights_scale_coef=3.0,
+    weights_scale_uniform=False,
+    train_against_best=True,
+
+    fred_mistake_rate=0.2,
+    test_runs=50,
+
+    start_new=False,
+    load_only=False,
     )
 
     #testModelVersions("hero_4", 3, 4, 8)
-
-    #p_user = TTTPlayerUser("User")
-    #p_fred = TTTPlayerFred(0.2)
-    #testagainstUser("hero_4_16x16_44240", p_user, 4)
-    #testagainstUser("hero_4_16x16_44240", p_fred, 30, 1)
 
     exit(0)
