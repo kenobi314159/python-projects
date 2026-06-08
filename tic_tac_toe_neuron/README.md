@@ -23,8 +23,10 @@ At this moment, all the parameters need to be modified in the src/main.py file b
 - grid_size - Size of the Tic Tac Toe grid the training is done on (3 for 3x3, 4 for 4x4, etc.).
 - win_strike_length - Number of symbols in a row needed to win the game.
   Regular Tic Tac Toe has 5, but for begenning of training it is better to use smaller values and first teach the network on simpler rules before going to more difficult ones.
-- MAX_TRAINING_DATA_SIZE - Maximum number of training data samples to keep in memory.
+- max_training_data_size - Maximum number of training data samples to keep in memory.
   This value helps with overflowing of computer memory capacity.
+- accumulate_training_data - When True, makes training data be accumulated over multiple training intervals until the max_training_data_size is reached.
+  When False, the training data is cleared after each training interval to prevent repeated training on the same samples.
 - model_grid_size - Size of the grid used as input for the model.
   This may be different from the grid size of the game.
   The program contains mechanisms to resize the game grid up or down when passing it to the model.

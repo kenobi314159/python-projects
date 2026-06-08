@@ -192,6 +192,7 @@ def trainModelProcess(
     model_games,
     model_inputs_trained,
     max_training_data_size,
+    accumulate_training_data,
     train_interval,
     batch_size,
     store_interval,
@@ -249,7 +250,7 @@ def trainModelProcess(
         stat_losers  = sum([pd[4] for pd in pdl])
 
         # Concatenate training data
-        if (training_data == None):
+        if (training_data == None or (not accumulate_training_data)):
             training_data = pdl[0][0]
             pdl = pdl[1:]
         for pd in pdl:
@@ -354,6 +355,7 @@ def train(
     model_games,
     model_inputs_trained,
     max_training_data_size,
+    accumulate_training_data,
     train_interval,
     store_interval,
     batch_size,
@@ -403,7 +405,7 @@ def train(
     
     # Create consumer process
     consumer_process = multiprocessing.Process(target=funcAbortWrapper, args=(trainModelProcess,
-        tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate))
+        tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, accumulate_training_data, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate))
     consumer_process.start()
 
     if (use_testing_thread):
