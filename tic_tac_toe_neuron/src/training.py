@@ -116,12 +116,16 @@ def generateTrainingDataProcess(
         losers = cutOffShortest(losers, shortest_cutoff)
 
         # Get training data
-        training_data_list = getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform)
+        win_lose_stat = {}
+        training_data_list = getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform, win_lose_stat)
 
         stat_winners = len(winners)
         stat_losers  = len(losers)
         stat_cutoff += len_prev_win - stat_winners
         stat_cutoff += len_prev_lose - stat_losers
+
+        win_lose_stat["winners"] = stat_winners
+        win_lose_stat["losers"]  = stat_losers
 
         if (len(training_data_list)):
             training_data = training_data_list[0]
@@ -130,12 +134,12 @@ def generateTrainingDataProcess(
 
             # Append to output list
             with produced_data_lock:
-                produced_data_list.append((training_data, stat_turns, stat_cutoff, stat_winners, stat_losers))
+                produced_data_list.append((training_data, stat_turns, stat_cutoff, win_lose_stat))
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
 # Gets training data from the winners and losers, applies weights scaling if needed, and concatenates it into a single list
-def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform):
+def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform, win_lose_stat={}):
     training_data_list_win  = []
     training_data_list_lose = []
     for winner in winners:
@@ -143,8 +147,13 @@ def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, 
     for loser in losers:
         training_data_list_lose.append(loser.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
 
-    normalizeTrainingDataWeights(training_data_list_win , winners)
-    normalizeTrainingDataWeights(training_data_list_lose, losers )
+    w_first, w_second = normalizeTrainingDataWeights(training_data_list_win , winners)
+    l_first, l_second = normalizeTrainingDataWeights(training_data_list_lose, losers )
+
+    win_lose_stat["w_first"]  = win_lose_stat.get("w_first" , 0) + w_first
+    win_lose_stat["w_second"] = win_lose_stat.get("w_second", 0) + w_second
+    win_lose_stat["l_first"]  = win_lose_stat.get("l_first" , 0) + l_first
+    win_lose_stat["l_second"] = win_lose_stat.get("l_second", 0) + l_second
 
     return training_data_list_win + training_data_list_lose
 
@@ -153,7 +162,7 @@ def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, 
 def normalizeTrainingDataWeights(training_data_list, players):
     assert (len(training_data_list) == len(players)), "The number of training data items must be the same as the number of players for weight normalization."
     if (len(training_data_list) == 0):
-        return
+        return 0, 0
 
     #S = "Normalizing training data weights:\n"
     #S += f"  Weights 0 original: {[float(x[0]) for x in training_data_list[0].weight_data]}\n"
@@ -173,7 +182,7 @@ def normalizeTrainingDataWeights(training_data_list, players):
         players.clear()
         #S += "  Clearing.\n"
         #print(S)
-        return
+        return games_played_first_num, games_num - games_played_first_num
 
     for td, p in zip(training_data_list, players):
         coef = played_first_weight if (p.plays_first) else played_second_weight
@@ -182,6 +191,8 @@ def normalizeTrainingDataWeights(training_data_list, players):
 
     #S += f"  Weights 1 modified: {[float(x[0]) for x in training_data_list[0].weight_data]}\n"
     #print(S)
+
+    return games_played_first_num, games_num - games_played_first_num
 
 # Process for training the model
 # Periodically loads the latest model, checks for new training data, trains the model on it,
@@ -244,10 +255,12 @@ def trainModelProcess(
         new_data_size = sum([len(pd[0].input_data) for pd in pdl])
 
         # Concatenate statistics
-        stat_turns   = sum([pd[1] for pd in pdl], [])
-        stat_cutoff  = sum([pd[2] for pd in pdl])
-        stat_winners = sum([pd[3] for pd in pdl])
-        stat_losers  = sum([pd[4] for pd in pdl])
+        stat_turns    = sum([pd[1] for pd in pdl], [])
+        stat_cutoff   = sum([pd[2] for pd in pdl])
+        stat_win_lose = {}
+        for w_l_s in [pd[3] for pd in pdl]:
+            for k, v in w_l_s.items():
+                stat_win_lose[k] = stat_win_lose.get(k, 0) + v
 
         # Concatenate training data
         if (training_data == None or (not accumulate_training_data)):
@@ -264,12 +277,18 @@ def trainModelProcess(
         stat_avg_turns = sum(stat_turns) / stat_games
         stat_min_turns = min(stat_turns)
         stat_max_turns = max(stat_turns)
+        stat_winners   = stat_win_lose.get("winners" , 0)
+        stat_losers    = stat_win_lose.get("losers"  , 0)
+        stat_w_first   = stat_win_lose.get("w_first" , 0)
+        stat_w_second  = stat_win_lose.get("w_second", 0)
+        stat_l_first   = stat_win_lose.get("l_first" , 0)
+        stat_l_second  = stat_win_lose.get("l_second", 0)
+        winners_losers_total = stat_cutoff + stat_winners + stat_losers
+        stat_cutoff_perc = 100 * stat_cutoff / winners_losers_total if winners_losers_total > 0 else 0
         time_passed = t - last_stat_time
         last_stat_time = t
         games_per_sec = stat_games / time_passed
-        winners_losers_total = stat_cutoff + stat_winners + stat_losers
-        stat_cutoff_perc = 100 * stat_cutoff / winners_losers_total if winners_losers_total > 0 else 0
-        print(f"   Time passed: {time_passed:.2f} s, Games: {stat_games:3}, Winners: {stat_winners:3}, Losers: {stat_losers:3}, Cut off winners/losers: {stat_cutoff:3} ({stat_cutoff_perc:.2f}%)\n   Avg turns: {stat_avg_turns:.2f}, Min turns: {stat_min_turns}, Max turns: {stat_max_turns}, Games/sec: {games_per_sec:5.2f}, New data size: {new_data_size}, Training data size: {len(training_data.input_data)}", flush=True)
+        print(f"   Time passed: {time_passed:.2f} s, Games: {stat_games:3}, Winners/first/second: {stat_winners:3}/{stat_w_first:3}/{stat_w_second:3}, Losers/first/second: {stat_losers:3}/{stat_l_first:3}/{stat_l_second:3}, Cut off games: {stat_cutoff:3} ({stat_cutoff_perc:.2f}%)\n   Turns min/avg/max: {stat_min_turns:3}/{stat_avg_turns:.2f}/{stat_max_turns}, Games/sec: {games_per_sec:5.2f}, New data size: {new_data_size}, Training data size: {len(training_data.input_data)}", flush=True)
 
         # Train model
         training_data.trainModel(model, batch_size, 1, MAX_TRAINING_DATA_SIZE)
