@@ -105,7 +105,7 @@ class TTTPlayerFred:
         return max_coord_set
 
     def getNextTurn(self, game_map):
-        preprocessed_map = mapToCnnInput(game_map, 4)
+        preprocessed_map = packGrids(mapToCnnInput(game_map, 4))
 
         map_value_potential_this_player  = preprocessed_map[0][2]
         map_value_potential_other_player = preprocessed_map[0][3]
@@ -244,7 +244,10 @@ class TTTPlayerCNN:
         # Select one of the variants to actually produce the next turn
         selected_variant = variants[0]
 
-        cnn_input  = self.input_transform_func(selected_variant.getResizedMap(game_map, input_grid_size), self.cnn_model.input_shape[1])
+        cnn_input_transformed = self.input_transform_func(game_map, self.cnn_model.input_shape[1])
+        cnn_input_resized     = [selected_variant.getResizedMap(m, input_grid_size) for m in cnn_input_transformed]
+        cnn_input_packed      = packGrids(cnn_input_resized)
+        cnn_input             = cnn_input_packed
         cnn_output = self.cnn_model(cnn_input)[0]
 
         S = ""
@@ -259,8 +262,9 @@ class TTTPlayerCNN:
         # Generate referential data for all variants with the same turn
         turn_index = self.turns_played-1
         for i,variant in enumerate(variants):
-            variant_cnn_input = self.input_transform_func(variant.getResizedMap(game_map, input_grid_size), self.cnn_model.input_shape[1])
-            self.cnn_input_history = tf.concat([self.cnn_input_history, variant_cnn_input], axis=0)
+            variant_cnn_input_resized = [variant.getResizedMap(m, input_grid_size) for m in cnn_input_transformed]
+            variant_cnn_input_packed  = packGrids(variant_cnn_input_resized)
+            self.cnn_input_history = tf.concat([self.cnn_input_history, variant_cnn_input_packed], axis=0)
             variant_output = variant.gameToCnn(game_x, game_y)
             self.result_history.append((turn_index, variant_output))
 

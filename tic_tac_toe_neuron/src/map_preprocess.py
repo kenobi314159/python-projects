@@ -210,11 +210,11 @@ def mapToCnnInput(game_map, cnn_input_grids):
     #    F.write(f"potential other player:\n{str_value_potential_other_player}")
 
     if (cnn_input_grids == 1):
-        cnn_input = packGrids([game_map])
+        cnn_input = [game_map]
     elif (cnn_input_grids >= 2 and cnn_input_grids <= 4):
-        cnn_input = packGrids([map_value_this_player, map_value_other_player, map_value_potential_this_player, map_value_potential_other_player][:cnn_input_grids])
+        cnn_input = [map_value_this_player, map_value_other_player, map_value_potential_this_player, map_value_potential_other_player][:cnn_input_grids]
     elif (cnn_input_grids == 5):
-        cnn_input = packGrids([game_map, map_value_this_player, map_value_other_player, map_value_potential_this_player, map_value_potential_other_player])
+        cnn_input = [game_map, map_value_this_player, map_value_other_player, map_value_potential_this_player, map_value_potential_other_player]
     else:
         assert (False), f"Unsupported number of input grids: {cnn_input_grids}"
 
