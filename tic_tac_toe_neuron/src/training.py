@@ -9,6 +9,13 @@ from storage import *
 from abort import *
 from global_params import *
 
+# Enable cProfile performance profiling
+PROFILE_ENABLE = False
+
+if (PROFILE_ENABLE):
+    import cProfile
+    import pstats
+
 # Sorts players by the number of turns played and leaves only those with the shortest histories
 # appearing in the set, up to the cutoff number of different history lengths.
 def cutOffShortest(players, cutoff):
@@ -58,6 +65,10 @@ def generateTrainingDataProcess(
 
     # Add random delay to avoid all generators accessing resources at the same time
     time.sleep(random()*4)
+
+    if (PROFILE_ENABLE):
+        pr = cProfile.Profile()
+        pr.enable()
 
     while (not os.path.exists(abort_file)):
         # Pause if pause file is present
@@ -135,6 +146,17 @@ def generateTrainingDataProcess(
             # Append to output list
             with produced_data_lock:
                 produced_data_list.append((training_data, stat_turns, stat_cutoff, win_lose_stat))
+
+    if (PROFILE_ENABLE):
+        identifier = f"gen_{multiprocessing.current_process().name}"
+        pr.disable()
+        pr.dump_stats(f"output_{identifier}.prof")
+        with open(f"output_{identifier}.txt", "w") as stream:
+            stats = pstats.Stats(f"output_{identifier}.prof", stream=stream)
+            stats.strip_dirs()
+            stats.sort_stats("cumulative")
+            stats.print_stats(0.02)
+        os.remove(f"output_{identifier}.prof")
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
@@ -229,6 +251,10 @@ def trainModelProcess(
 
     stat_history = []
 
+    if (PROFILE_ENABLE):
+        pr = cProfile.Profile()
+        pr.enable()
+
     while (not os.path.exists(abort_file)):
         # Pause if pause file is present
         if (os.path.exists(pause_file)):
@@ -309,6 +335,17 @@ def trainModelProcess(
             print(f"Storing model {model_name}_{model_games}_{model_inputs_trained}", flush=True)
             last_store_time = t
             storage.storeModel(model, f"{model_name}_{model_games}_{model_inputs_trained}")
+
+    if (PROFILE_ENABLE):
+        identifier = f"train_{multiprocessing.current_process().name}"
+        pr.disable()
+        pr.dump_stats(f"output_{identifier}.prof")
+        with open(f"output_{identifier}.txt", "w") as stream:
+            stats = pstats.Stats(f"output_{identifier}.prof", stream=stream)
+            stats.strip_dirs()
+            stats.sort_stats("cumulative")
+            stats.print_stats(0.02)
+        os.remove(f"output_{identifier}.prof")
 
     print(f"Model training {multiprocessing.current_process().name} finished", flush=True)
 
