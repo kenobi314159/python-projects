@@ -94,6 +94,7 @@ def trainCustomModel0(
         model_games = model_games,
         model_inputs_trained = model_inputs_trained,
         max_training_data_size = MAX_TRAINING_DATA_SIZE * max_training_data_size,
+        accumulate_training_data=False,
         train_interval = train_interval,
         store_interval = 10*60,
         batch_size = 150,
@@ -178,22 +179,22 @@ if __name__ == "__main__":
         exit(0)
 
     trainCustomModel0(
-    name="model-t8-1",
-    conv_layers=5,
-    dense_layers=3,
+    name="model-t9-5",
+    conv_layers=10,
+    dense_layers=4,
 
-    max_training_data_size=60,
+    max_training_data_size=1000,
     train_interval=20*60,
-    serial_rounds=40,
+    serial_rounds=100,
     threads_num=8,
     shortest_cutoff=0,
     winner_weight=1.0,
     loser_weight=0.0,
-    learning_rate=0.000001,
-    player_training_variants=120,
+    learning_rate=0.000002,
+    player_training_variants=200,
     top_random_select_size=10,
     top_select_equal=True,
-    weights_scale_coef=3.0,
+    weights_scale_coef=0.0,
     weights_scale_uniform=False,
     train_against_best=True,
 
