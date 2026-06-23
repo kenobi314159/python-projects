@@ -189,12 +189,15 @@ def mapToCnnInput(game_map, cnn_input_grids):
     #str_value_potential_this_player = ""
     #str_value_potential_other_player = ""
 
-    for i in range(len(game_map)):
-        for e in range(len(game_map[i])):
-            map_value_this_player           [i][e] = getPreprocessedValue(game_map, e, i, 1)
-            map_value_other_player          [i][e] = getPreprocessedValue(game_map, e, i, 2)
-            map_value_potential_this_player [i][e] = getPreprocessedValue(game_map, e, i, 1, True)
-            map_value_potential_other_player[i][e] = getPreprocessedValue(game_map, e, i, 2, True)
+    if (cnn_input_grids >= 2):
+        for i in range(len(game_map)):
+            for e in range(len(game_map[i])):
+                map_value_this_player           [i][e] = getPreprocessedValue(game_map, e, i, 1)
+                map_value_other_player          [i][e] = getPreprocessedValue(game_map, e, i, 2)
+                if (cnn_input_grids >= 3):
+                    map_value_potential_this_player[i][e] = getPreprocessedValue(game_map, e, i, 1, True)
+                    if (cnn_input_grids >= 4):
+                        map_value_potential_other_player[i][e] = getPreprocessedValue(game_map, e, i, 2, True)
         #str_map += " ".join([f"{x:2d}" for x in game_map[i]]) + "\n"
         #str_value_this_player += " ".join([f"{x:2d}" for x in map_value_this_player[i]]) + "\n"
         #str_value_other_player += " ".join([f"{x:2d}" for x in map_value_other_player[i]]) + "\n"
