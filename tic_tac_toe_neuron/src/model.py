@@ -1,11 +1,11 @@
 import tensorflow as tf
-from tensorflow.keras.models import Sequential, Model
+from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Conv3D, MaxPooling2D, Flatten, Dense, Reshape, Input, Dropout
+from tensorflow.keras.layers import Conv3D, MaxPooling2D, Flatten, Dense, Reshape, Input, Dropout, Concatenate
 from tensorflow.keras.losses import CategoricalCrossentropy
 from random import randint
 
-def createCnnModel(input_grid_size, output_grid_size, conv_layers=64, dense_sizes=None, conv_activation="linear", mid_activations=["relu", "relu", "relu", "relu"], out_activation="softmax", input_grids=1):
+def createCnnModel(input_grid_size, output_grid_size, conv3x3_layers=64, conv3x3_channels=8, conv5x5_layers=32, conv5x5_channels=8, input_to_dense_propagate=True, dense_sizes=None, conv_activation="linear", mid_activations=["relu", "relu", "relu", "relu"], out_activation="softmax", input_grids=1):
     """
     Defines a simple CNN model.
     """
@@ -18,27 +18,46 @@ def createCnnModel(input_grid_size, output_grid_size, conv_layers=64, dense_size
     # Output contains a single grid
     output_shape = (output_grid_size, output_grid_size, 1)
 
-    layers = [
-        Input(input_shape),
-    ]
+    input_layer = Input(input_shape)
 
-    if (conv_layers > 0):
-        # Convolution is done separately for each input grid
-        layers.append(Conv3D(conv_layers, (1, 3, 3), activation=conv_activation))
+    # 3x3 convolution layers
+    conv3x3_layer = input_layer
+    for i in range(conv3x3_layers):
+        conv3x3_layer = Conv3D(conv3x3_channels, (1, 3, 3), padding="same", activation=conv_activation)(conv3x3_layer)
 
-    layers.append(Flatten())
+    # 5x5 convolution layers
+    conv5x5_layer = input_layer
+    for i in range(conv5x5_layers):
+        conv5x5_layer = Conv3D(conv5x5_channels, (1, 5, 5), padding="same", activation=conv_activation)(conv5x5_layer)
 
+    dense_input = []
+    if (conv3x3_layers):
+        dense_input.append(conv3x3_layer)
+    if (conv5x5_layers):
+        dense_input.append(conv5x5_layer)
+    if (input_to_dense_propagate):
+        dense_input.append(input_layer)
+
+    assert (len(dense_input) > 0), "No input to dense layers. At least one of conv3x3_layers, conv5x5_layers or input_to_dense_propagate must be non-zero."
+
+    # Concatenate and flatten convolution outputs
+    if (len(dense_input) > 1):
+        dense_input = Concatenate(axis=-1)(dense_input)
+    else:
+        dense_input = dense_input[0]
+    dense_input_flat = Flatten()(dense_input)
+
+    # Dense layers
+    dense_layer = dense_input_flat
     for a,s in zip(mid_activations, dense_sizes):
-        layers.append(Dense(s, activation=a))
+        dense_layer = Dense(s, activation=a)(dense_layer)
 
     # Last layer always has the size of the output grid
-    layers += [
-        Dense(output_grid_size * output_grid_size, activation=out_activation),
-        Dropout(0.2),
-        Reshape(output_shape)
-    ]
+    dense_layer   = Dense(output_grid_size * output_grid_size, activation=out_activation)(dense_layer)
+    dropout_layer = Dropout(0.2)(dense_layer)
+    output_layer  = Reshape(output_shape)(dropout_layer)
 
-    model = Sequential(layers)
+    model = Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=Adam(learning_rate=0.00001), loss=CategoricalCrossentropy(from_logits=False), weighted_metrics=["categorical_crossentropy"])
 
     #print(model.summary())
