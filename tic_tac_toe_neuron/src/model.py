@@ -15,7 +15,7 @@ def createCnnModel(input_grid_size, output_grid_size, conv_layers=64, dense_size
 
     # Input contains a number of grids
     input_shape  = (input_grids, input_grid_size, input_grid_size, 1)
-    # Input contains a single grid
+    # Output contains a single grid
     output_shape = (output_grid_size, output_grid_size, 1)
 
     layers = [
