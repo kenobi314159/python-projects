@@ -332,9 +332,10 @@ def trainModelProcess(
         model_games += stat_games
         model_inputs_trained += len(training_data.input_data)
         if (t - last_store_time > store_interval):
-            print(f"Storing model {model_name}_{model_games}_{model_inputs_trained}", flush=True)
+            name = f"{model_name}_{stat_avg_turns:.1f}avg_{model_games}_{model_inputs_trained}"
+            print(f"Storing model {name}", flush=True)
             last_store_time = t
-            storage.storeModel(model, f"{model_name}_{model_games}_{model_inputs_trained}")
+            storage.storeModel(model, name)
 
     if (PROFILE_ENABLE):
         identifier = f"train_{multiprocessing.current_process().name}"
