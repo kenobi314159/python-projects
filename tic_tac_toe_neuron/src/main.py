@@ -30,6 +30,7 @@ def trainCustomModel0(
     conv5x5_layers=10,
     conv5x5_channels=4,
     input_to_dense_propagate=True,
+    dense_width_multiplier=1,
     dense_layers=3,
 
     max_training_data_size=50,
@@ -66,7 +67,7 @@ def trainCustomModel0(
         func3 = "swish"
         func4 = "softmax"
         dense_sizes = [
-            model_grid_size * model_grid_size * width,
+            model_grid_size * model_grid_size * width * dense_width_multiplier,
         ] * dense_layers
         mid_activations = [func1] * (dense_layers)
         m_hero = createCnnModel(
@@ -171,15 +172,17 @@ if __name__ == "__main__":
     parser.add_argument("--conv3x3-layers",
         type=int, default=1, help="Number of 3x3 convolutional layers in the model. Default value is 1.")
     parser.add_argument("--conv3x3-channels",
-        type=int, default=5, help="Number of channels in 3x3 convolutional layers. Default value is 5.")
+        type=int, default=4, help="Number of channels in 3x3 convolutional layers. Default value is 5.")
     parser.add_argument("--conv5x5-layers",
         type=int, default=1, help="Number of 5x5 convolutional layers in the model. Default value is 1.")
     parser.add_argument("--conv5x5-channels",
-        type=int, default=5, help="Number of channels in 5x5 convolutional layers. Default value is 5.")
+        type=int, default=4, help="Number of channels in 5x5 convolutional layers. Default value is 5.")
     parser.add_argument("--input-to-dense-propagate",
         action="store_true", default=True, help="Propagate input directly to dense layers in the model. Default is True.")
+    parser.add_argument("--dense-width-multiplier",
+        type=int, default=3, help="Multiplication of internal dense layers width.")
     parser.add_argument("--dense-layers",
-        type=int, default=4, help="Number of dense layers in the model. Default value is 4.")
+        type=int, default=2, help="Number of dense layers in the model. Default value is 4.")
 
     args = parser.parse_args()
 
@@ -207,7 +210,7 @@ if __name__ == "__main__":
     #exit()
 
     trainCustomModel0(
-    name=f"model-t12-0_3x3-{args.conv3x3_layers}x{args.conv3x3_channels}_5x5-{args.conv5x5_layers}x{args.conv5x5_channels}_{str(args.input_to_dense_propagate)}",
+    name=f"model-t15-1_3x3-{args.conv3x3_layers}x{args.conv3x3_channels}_5x5-{args.conv5x5_layers}x{args.conv5x5_channels}_{str(args.input_to_dense_propagate)}",
 
     start_new=args.start_new,
     input_width=args.input_width,
@@ -216,23 +219,24 @@ if __name__ == "__main__":
     conv5x5_layers=args.conv5x5_layers,
     conv5x5_channels=args.conv5x5_channels,
     input_to_dense_propagate=args.input_to_dense_propagate,
+    dense_width_multiplier=args.dense_width_multiplier,
     dense_layers=args.dense_layers,
 
     load_only=False,
 
     max_training_data_size=1000,
-    train_interval=2*60,
-    serial_rounds=40,
+    train_interval=20*60,
+    serial_rounds=50,
     threads_num=8,
     shortest_cutoff=0,
     winner_weight=1.0,
     loser_weight=0.0,
-    learning_rate=0.00001,
-    player_training_variants=100,
-    top_random_select_size=3,
+    learning_rate=0.000001,
+    player_training_variants=50,
+    top_random_select_size=8,
     top_select_equal=True,
-    weights_scale_coef=1.0,
-    weights_scale_uniform=True,
+    weights_scale_coef=3.0,
+    weights_scale_uniform=False,
     train_against_best=True,
 
     fred_mistake_rate=0.2,
