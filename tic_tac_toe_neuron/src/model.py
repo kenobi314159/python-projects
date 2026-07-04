@@ -60,7 +60,7 @@ def createCnnModel(input_grid_size, output_grid_size, conv3x3_layers=64, conv3x3
     model = Model(inputs=input_layer, outputs=output_layer)
     model.compile(optimizer=Adam(learning_rate=0.00001), loss=CategoricalCrossentropy(from_logits=False), weighted_metrics=["categorical_crossentropy"])
 
-    #print(model.summary())
+    print(model.summary())
 
     return model
 
