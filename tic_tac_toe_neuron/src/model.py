@@ -1,17 +1,56 @@
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.layers import Conv3D, MaxPooling2D, Flatten, Dense, Reshape, Input, Dropout, Concatenate
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Reshape, Input, Dropout, Concatenate
 from tensorflow.keras.losses import CategoricalCrossentropy
 from random import randint
 
-def createCnnModel(input_grid_size, output_grid_size, conv3x3_layers=64, conv3x3_channels=8, conv5x5_layers=32, conv5x5_channels=8, input_to_dense_propagate=True, dense_sizes=None, conv_activation="linear", mid_activations=["relu", "relu", "relu", "relu"], out_activation="softmax", input_grids=1):
+def createCnnModel(
+    input_grids,
+    input_grid_size,
+    output_grid_size,
+    conv3x3_depth=1,
+    conv3x3_channels=1,
+    conv5x5_depth=1,
+    conv5x5_channels=1,
+    propagate_input_to_partial_dense=True,
+    partial_dense_depth=1,
+    partial_dense_width=None,
+    full_dense_depth=1,
+    full_dense_width=None,
+    conv_activation="swish",
+    dense_activation="tanh",
+    out_activation="softmax",
+    ):
     """
-    Defines a simple CNN model.
+    Defines a CNN model with more or less the following structure:
+
+           (I)
+            |
+       +----+----+
+       |    |    |
+      (C3) (C5)  |
+       |    |    |
+      (D)  (D)  (D)
+       |    |    |
+       +----+----+
+            |
+           (D)
+            |
+           (O)
+
+    Legend:
+        (I)  - Input layer (Multiple 2D grids of values)
+        (C3) - 3x3 convolution layer per grid with multiple channels
+        (C5) - 5x5 convolution layer per grid with multiple channels
+        (D)  - Dense layer per grid
+        (O)  - Output layer (Single dense 2D grid of values)
     """
-    if (dense_sizes == None):
-        # Default setting is two layers each as big as one input or output, whichever is bigger
-        dense_sizes = [max(input_grid_size, output_grid_size)**2] * 2
+    # Default setting is same width as one input or output grid, whichever is bigger
+    if (partial_dense_width == None):
+        partial_dense_width = max(input_grid_size, output_grid_size)**2
+    if (full_dense_width == None):
+        full_dense_width = max(input_grid_size, output_grid_size)**2
 
     # Input contains a number of grids
     input_shape  = (input_grids, input_grid_size, input_grid_size, 1)
@@ -19,42 +58,49 @@ def createCnnModel(input_grid_size, output_grid_size, conv3x3_layers=64, conv3x3
     output_shape = (output_grid_size, output_grid_size, 1)
 
     input_layer = Input(input_shape)
+    input_layer_split = tf.split(input_layer, num_or_size_splits=input_grids, axis=1)
+    input_layer_split = [tf.squeeze(t, axis=1) for t in input_layer_split]
 
     # 3x3 convolution layers
-    conv3x3_layer = input_layer
-    for i in range(conv3x3_layers):
-        conv3x3_layer = Conv3D(conv3x3_channels, (1, 3, 3), padding="same", activation=conv_activation)(conv3x3_layer)
+    conv3x3_layer = input_layer_split
+    for i in range(conv3x3_depth):
+        conv3x3_layer = [Conv2D(conv3x3_channels, (3, 3), padding="same", activation=conv_activation)(l) for l in conv3x3_layer]
 
     # 5x5 convolution layers
-    conv5x5_layer = input_layer
-    for i in range(conv5x5_layers):
-        conv5x5_layer = Conv3D(conv5x5_channels, (1, 5, 5), padding="same", activation=conv_activation)(conv5x5_layer)
+    conv5x5_layer = input_layer_split
+    for i in range(conv5x5_depth):
+        conv5x5_layer = [Conv2D(conv5x5_channels, (5, 5), padding="same", activation=conv_activation)(l) for l in conv5x5_layer]
 
-    dense_input = []
-    if (conv3x3_layers):
-        dense_input.append(conv3x3_layer)
-    if (conv5x5_layers):
-        dense_input.append(conv5x5_layer)
-    if (input_to_dense_propagate):
-        dense_input.append(input_layer)
+    partial_dense_input = []
+    if (conv3x3_depth):
+        partial_dense_input += conv3x3_layer
+    if (conv5x5_depth):
+        partial_dense_input += conv5x5_layer
+    if (propagate_input_to_partial_dense):
+        partial_dense_input += input_layer_split
 
-    assert (len(dense_input) > 0), "No input to dense layers. At least one of conv3x3_layers, conv5x5_layers or input_to_dense_propagate must be non-zero."
+    assert (len(partial_dense_input) > 0), "No input to dense layers. At least one of conv3x3_depth, conv5x5_depth or propagate_input_to_partial_dense must be non-zero."
 
-    # Concatenate and flatten convolution outputs
-    if (len(dense_input) > 1):
-        dense_input = Concatenate(axis=-1)(dense_input)
-    else:
-        dense_input = dense_input[0]
-    dense_input_flat = Flatten()(dense_input)
+    # Flatten individual convolution outputs
+    partial_dense_input = [Flatten()(l) for l in partial_dense_input]
 
-    # Dense layers
-    dense_layer = dense_input_flat
-    for a,s in zip(mid_activations, dense_sizes):
-        dense_layer = Dense(s, activation=a)(dense_layer)
+    # Partial dense layers
+    dense_input = partial_dense_input
+    for i in range(partial_dense_depth):
+        dense_input = [Dense(input_grid_size**2, activation=dense_activation)(l) for l in dense_input]
+
+    # Concatenate and flatten all
+    dense_input_flat = tf.stack(dense_input, axis=1)
+    dense_input_flat = Flatten()(dense_input_flat)
+
+    # Full dense layers
+    full_dense_layer = dense_input_flat
+    for i in range(full_dense_depth):
+        full_dense_layer = Dense(full_dense_width, activation=dense_activation)(full_dense_layer)
 
     # Last layer always has the size of the output grid
-    dense_layer   = Dense(output_grid_size * output_grid_size, activation=out_activation)(dense_layer)
-    dropout_layer = Dropout(0.2)(dense_layer)
+    full_dense_layer   = Dense(output_grid_size * output_grid_size, activation=out_activation)(full_dense_layer)
+    dropout_layer = Dropout(0.2)(full_dense_layer)
     output_layer  = Reshape(output_shape)(dropout_layer)
 
     model = Model(inputs=input_layer, outputs=output_layer)
