@@ -25,13 +25,15 @@ from training import *
 def trainCustomModel0(
     name="model0",
     input_width = 4,
-    conv3x3_layers=10,
+    conv3x3_depth=10,
     conv3x3_channels=4,
-    conv5x5_layers=10,
+    conv5x5_depth=10,
     conv5x5_channels=4,
-    input_to_dense_propagate=True,
-    dense_width_multiplier=1,
-    dense_layers=3,
+    propagate_input_to_partial_dense=True,
+    partial_dense_width_multiplier=1,
+    partial_dense_depth=1,
+    full_dense_width_multiplier=1,
+    full_dense_depth=1,
 
     max_training_data_size=50,
     train_interval=3*60,
@@ -59,30 +61,30 @@ def trainCustomModel0(
     model_name = f"{name}_{model_grid_size}x{model_grid_size}"
 
     if (start_new):
-        dense_layers = dense_layers
-        width = input_width
         func0 = "elu"
         func1 = "tanh"
         func2 = "relu"
         func3 = "swish"
         func4 = "softmax"
-        dense_sizes = [
-            model_grid_size * model_grid_size * width * dense_width_multiplier,
-        ] * dense_layers
-        mid_activations = [func1] * (dense_layers)
+        partial_dense_width = model_grid_size**2 * input_width * partial_dense_width_multiplier
+        full_dense_width = model_grid_size**2 * input_width * full_dense_width_multiplier
+
         m_hero = createCnnModel(
-            model_grid_size,
-            model_grid_size,
-            conv3x3_layers=conv3x3_layers,
+            input_grids=input_width,
+            input_grid_size=model_grid_size,
+            output_grid_size=model_grid_size,
+            conv3x3_depth=conv3x3_depth,
             conv3x3_channels=conv3x3_channels,
-            conv5x5_layers=conv5x5_layers,
+            conv5x5_depth=conv5x5_depth,
             conv5x5_channels=conv5x5_channels,
-            input_to_dense_propagate=input_to_dense_propagate,
-            dense_sizes=dense_sizes,
+            propagate_input_to_partial_dense=propagate_input_to_partial_dense,
+            partial_dense_depth=partial_dense_depth,
+            partial_dense_width=partial_dense_width,
+            full_dense_depth=full_dense_depth,
+            full_dense_width=full_dense_width,
             conv_activation=func3,
-            mid_activations=mid_activations,
+            dense_activation=func1,
             out_activation=func4,
-            input_grids=width,
         )
         model_games = 0
         model_inputs_trained = 0
@@ -169,20 +171,24 @@ if __name__ == "__main__":
         action="store_true", help="Start training a new model instead of loading the latest one.")
     parser.add_argument("--input-width",
         type=int, default=4, help="Width of the input data for the model. Default value is 4.")
-    parser.add_argument("--conv3x3-layers",
+    parser.add_argument("--conv3x3-depth",
         type=int, default=1, help="Number of 3x3 convolutional layers in the model. Default value is 1.")
     parser.add_argument("--conv3x3-channels",
-        type=int, default=4, help="Number of channels in 3x3 convolutional layers. Default value is 5.")
-    parser.add_argument("--conv5x5-layers",
+        type=int, default=1, help="Number of channels in 3x3 convolutional layers. Default value is 1.")
+    parser.add_argument("--conv5x5-depth",
         type=int, default=1, help="Number of 5x5 convolutional layers in the model. Default value is 1.")
     parser.add_argument("--conv5x5-channels",
-        type=int, default=4, help="Number of channels in 5x5 convolutional layers. Default value is 5.")
-    parser.add_argument("--input-to-dense-propagate",
+        type=int, default=1, help="Number of channels in 5x5 convolutional layers. Default value is 1.")
+    parser.add_argument("--propagate-input-to-partial-dense",
         action="store_true", default=True, help="Propagate input directly to dense layers in the model. Default is True.")
-    parser.add_argument("--dense-width-multiplier",
-        type=int, default=3, help="Multiplication of internal dense layers width.")
-    parser.add_argument("--dense-layers",
-        type=int, default=2, help="Number of dense layers in the model. Default value is 4.")
+    parser.add_argument("--partial-dense-width-multiplier",
+        type=int, default=1, help="Multiplication of partial dense layers width. Default value is 1.")
+    parser.add_argument("--partial-dense-depth",
+        type=int, default=1, help="Number of partial dense layers in the model. Default value is 1.")
+    parser.add_argument("--full-dense-width-multiplier",
+        type=int, default=1, help="Multiplication of full dense layers width. Default value is 1.")
+    parser.add_argument("--full-dense-depth",
+        type=int, default=1, help="Number of full dense layers in the model. Default value is 1.")
 
     args = parser.parse_args()
 
@@ -210,17 +216,19 @@ if __name__ == "__main__":
     #exit()
 
     trainCustomModel0(
-    name=f"model-t15-1_3x3-{args.conv3x3_layers}x{args.conv3x3_channels}_5x5-{args.conv5x5_layers}x{args.conv5x5_channels}_{str(args.input_to_dense_propagate)}",
+    name=f"model-t16-1_3x3-{args.conv3x3_depth}x{args.conv3x3_channels}_5x5-{args.conv5x5_depth}x{args.conv5x5_channels}_{str(args.propagate_input_to_partial_dense)}_pd-{args.full_dense_width_multiplier}x{args.full_dense_depth}_fd-{args.full_dense_width_multiplier}x{args.full_dense_depth}",
 
     start_new=args.start_new,
     input_width=args.input_width,
-    conv3x3_layers=args.conv3x3_layers,
+    conv3x3_depth=args.conv3x3_depth,
     conv3x3_channels=args.conv3x3_channels,
-    conv5x5_layers=args.conv5x5_layers,
+    conv5x5_depth=args.conv5x5_depth,
     conv5x5_channels=args.conv5x5_channels,
-    input_to_dense_propagate=args.input_to_dense_propagate,
-    dense_width_multiplier=args.dense_width_multiplier,
-    dense_layers=args.dense_layers,
+    propagate_input_to_partial_dense=args.propagate_input_to_partial_dense,
+    partial_dense_width_multiplier=args.partial_dense_width_multiplier,
+    partial_dense_depth=args.partial_dense_depth,
+    full_dense_width_multiplier=args.full_dense_width_multiplier,
+    full_dense_depth=args.full_dense_depth,
 
     load_only=False,
 
