@@ -87,7 +87,7 @@ def createCnnModel(
     # Partial dense layers
     dense_input = partial_dense_input
     for i in range(partial_dense_depth):
-        dense_input = [Dense(input_grid_size**2, activation=dense_activation)(l) for l in dense_input]
+        dense_input = [Dense(partial_dense_width, activation=dense_activation)(l) for l in dense_input]
 
     # Concatenate and flatten all
     dense_input_flat = tf.stack(dense_input, axis=1)
