@@ -119,6 +119,13 @@ def generateTrainingDataProcess(
             if (os.path.exists(abort_file) or os.path.exists(pause_file)):
                 break
 
+        for p in winners:
+            p.recorded_game.played_first = p.plays_first
+            p.recorded_game.won = True
+        for p in losers:
+            p.recorded_game.played_first = p.plays_first
+            p.recorded_game.won = False
+
         # Cut off to only get players with the shortest histories (fastest win/lose)
         len_prev_win = len(winners)
         winners = cutOffShortest(winners, shortest_cutoff)
@@ -166,27 +173,21 @@ def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, 
     training_data_list_lose = []
     for winner in winners:
         training_data_list_win.append(getTrainingData(
+            [winner.recorded_game],
+            winner.cnn_model.input_shape,
+            winner.training_variants,
             winner.winner_weight,
             winner.loser_weight,
-            winner.turns_played,
-            winner.result_history,
-            winner.cnn_input_history,
-            winner.cnn_model.output_shape,
-            win_strike_length,
-            True,
             weights_scale_coef,
             weights_scale_uniform
             ))
     for loser in losers:
         training_data_list_lose.append(getTrainingData(
+            [loser.recorded_game],
+            loser.cnn_model.input_shape,
+            loser.training_variants,
             loser.winner_weight,
             loser.loser_weight,
-            loser.turns_played,
-            loser.result_history,
-            loser.cnn_input_history,
-            loser.cnn_model.output_shape,
-            win_strike_length,
-            True,
             weights_scale_coef,
             weights_scale_uniform))
 

@@ -177,6 +177,7 @@ class TTTPlayerCNN:
         self.cnn_input_history = tf.constant([], shape=[0] + list(self.cnn_model.input_shape[1:]),dtype=tf.int32)
         self.result_history = []
         self.turns_played = 0
+        self.recorded_game = CNNPlayedGameInfo()
 
     def copy(self):
         new_player = TTTPlayerCNN(self.cnn_model, self.training_variants, self.winner_weight, self.loser_weight, self.top_random_select_size, self.top_select_equal, self.plays_first)
@@ -238,7 +239,7 @@ class TTTPlayerCNN:
         input_grid_size = self.cnn_model.input_shape[2]
 
         # Only generate actual maps for a desired subset (to reduce complexity)
-        training_variants = len(variants_shifts) if self.training_variants == None else self.training_variants
+        training_variants = self.training_variants
         variants = MapVariation.getRandomVariations(training_variants, len(game_map), input_grid_size)
 
         # Select one of the variants to actually produce the next turn
@@ -258,6 +259,8 @@ class TTTPlayerCNN:
         #S += dataToStr(cnn_output)
 
         cnn_output_x, cnn_output_y, game_x, game_y, max_v = self.selectTopRandom(game_map, cnn_output, input_grid_size, selected_variant)
+
+        self.recorded_game.played_turns.append(CNNPlayedTurnInfo(game_map, cnn_input_transformed, game_x, game_y))
 
         # Generate referential data for all variants with the same turn
         turn_index = self.turns_played-1
@@ -306,54 +309,111 @@ class TTTPlayerCNN:
 
         return game_x, game_y
 
-def _getWeightData(winner_weight, loser_weight, turns_played, result_history, win_strike_length, won, weights_scale_coef=0.0, weights_scale_uniform=False):
-    # For each turn, the weight is devided by the number of remaining turns in the game.
-    # The largest weight (coefficient 1.0) is for the last turn.
-    # Each turn before that has its weight lowered based on the weights_scale_coef.
-    # For weights_scale_coef = 0.0, all turns have weight 1.0.
-    # For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
-    # For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
-    # For weights_scale_uniform==True, all turns are weighted the same as the first turn (a long play gets lower weight
-    # than short play).
-    target_weight = winner_weight if won else loser_weight
-    steps = turns_played
-    weight_data = [[target_weight] for i in range(len(result_history))]
+class CNNPlayedTurnInfo:
+    """
+    Information about a single turn played by a CNN player for the purpose
+    of generating training data later.
+    """
 
-    if (weights_scale_coef > 0.0):
+    def __init__(self, game_map, game_map_transformed, turn_x, turn_y):
+        self.game_map             = game_map
+        self.game_map_transformed = game_map_transformed
+        self.turn_x               = turn_x
+        self.turn_y               = turn_y
+
+class CNNPlayedGameInfo:
+    """
+    Information about a series of turns played by a CNN player within a single game
+    for the purpose of generating training data later.
+    """
+
+    def __init__(self, played_turns=[], played_first=False, won=False):
+        self.played_turns = played_turns
+        self.played_first = played_first
+        self.won          = won
+
+def getRefOutputData(won, output_grid_size, turn_x, turn_y):
+    x = turn_x
+    y = turn_y
+    if (won):
+        # If player won, set expected output to 1 on index which was played
+        # and 0 everywhere else
+        exp_output = [[0 for ee in range(output_grid_size)] for i in range(output_grid_size)]
+        exp_output[y][x] = 1
+    else:
+        # If player lost, set expected output to 0 on index which was played
+        # and N everywhere else, where N is a value, whose sum over all fields
+        # is equal to 1
+        N = 1 / (output_grid_size * output_grid_size - 1)
+        exp_output = [[N for ee in range(output_grid_size)] for i in range(output_grid_size)]
+        exp_output[y][x] = 0
+    return exp_output
+
+def getTrainingData(
+    recorded_games_info,
+    cnn_input_shape,
+    training_variants,
+    winner_weight,
+    loser_weight,
+    weights_scale_coef=0.0,
+    weights_scale_uniform=False
+    ):
+    """
+    Generate proper CNN model training data from a list of recorded games played by the CNN player.
+
+    Weight calculation:
+      For each turn, the weight is devided by the number of remaining turns in the game.
+      The largest weight (coefficient 1.0) is for the last turn.
+      Each turn before that has its weight lowered based on the weights_scale_coef.
+      For weights_scale_coef = 0.0, all turns have weight 1.0.
+      For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
+      For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
+      For weights_scale_uniform==True, all turns are weighted the same as the first turns (a long game turns get lower weight than short dame turns).
+    """
+    #training_data_input      = tf.constant([], shape=[0] + list(cnn_input_shape[1:]), dtype=tf.int32)
+    #return tf.constant(training_data_ref_output, dtype=tf.float32)
+    training_data_input      = []
+    training_data_weight     = []
+    training_data_ref_output = []
+
+    weights_scale = (weights_scale_coef > 0.0)
+    if (weights_scale):
         reverted_coef = 1.0 / weights_scale_coef
-        turn = result_history[0][0]
-        turns_remaining = steps - turn
-        for i,r in enumerate(result_history):
-            if (not weights_scale_uniform):
-                turn = r[0]
-                turns_remaining = steps - turn
-            weight_data[i][0] = target_weight / (turns_remaining ** reverted_coef)
 
-    return tf.constant(weight_data, dtype=tf.float32)
+    for game in recorded_games_info:
+        # Pre-calculate some weight variables
+        weight    = winner_weight if game.won else loser_weight
+        turns_cnt = len(game.played_turns)
+        if (weights_scale and weights_scale_uniform):
+            # Same weight for every turn
+            turns_remaining = turns_cnt
+            weight = weight / (turns_remaining ** reverted_coef)
 
-def _getRefOutputData(won, cnn_output_shape, result_history):
-    ref_output_data = []
-    output_grid_size = cnn_output_shape[1]
-    for _,r in result_history:
-        x = r[0]
-        y = r[1]
-        if (won):
-            # If player won, set expected output to 1 on index which was played
-            # and 0 everywhere else
-            exp_output = [[0 for ee in range(output_grid_size)] for i in range(output_grid_size)]
-            exp_output[y][x] = 1
-        else:
-            # If player lost, set expected output to 0 on index which was played
-            # and N everywhere else, where N is a value, whose sum over all fields
-            # is equal to 1
-            N = 1 / (output_grid_size * output_grid_size - 1)
-            exp_output = [[N for ee in range(output_grid_size)] for i in range(output_grid_size)]
-            exp_output[y][x] = 0
-        ref_output_data.append(exp_output)
-    return tf.constant(ref_output_data, dtype=tf.float32)
+        for turn_index,turn in enumerate(game.played_turns):
+            if (weights_scale and (not weights_scale_uniform)):
+                # Calculate weight for this specific turn
+                turns_remaining = turns_cnt - turn_index
+                weight = weight / (turns_remaining ** reverted_coef)
+            training_data_weight.append(weight)
 
-def getTrainingData(winner_weight, loser_weight, turns_played, result_history, cnn_input_history, cnn_output_shape, win_strike_length, won=True, weights_scale_coef=0.0, weights_scale_uniform=False):
-    input_data      = cnn_input_history
-    weight_data     = _getWeightData(winner_weight, loser_weight, turns_played, result_history, win_strike_length, won, weights_scale_coef, weights_scale_uniform)
-    ref_output_data = _getRefOutputData(won, cnn_output_shape, result_history)
-    return TrainingData(input_data, weight_data, ref_output_data)
+            game_grid_size = len(turn.game_map)
+            cnn_grid_size  = cnn_input_shape[2]
+
+            # Define a set of random variants of the turn with different shifts, rotations and mirroring
+            variants = MapVariation.getRandomVariations(training_variants, game_grid_size, cnn_grid_size)
+
+            for variant in variants:
+                # Apply variant to turn input map
+                input_map_variant    = [variant.getResizedMap(m, cnn_grid_size) for m in turn.game_map_transformed]
+                training_data_input.append(input_map_variant)
+
+                # Apply variant to turn output
+                variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
+                training_data_ref_output.append(getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y))
+
+    # Transform data to TensorFlow tensors
+    training_data_input      = tf.constant([packGrids(d) for d in training_data_input], dtype=tf.int32)
+    training_data_weight     = tf.constant(training_data_weight, dtype=tf.float32)
+    training_data_ref_output = tf.constant(training_data_ref_output, dtype=tf.float32)
+
+    return TrainingData(training_data_input, training_data_weight, training_data_ref_output)
