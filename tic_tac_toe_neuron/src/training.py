@@ -145,10 +145,14 @@ class TrainingDataStats:
         # Weigh training data based on number of games played as first player or second player.
         # If a majority of games were played as first player or as second player,
         # then the weight of these majority games will be lower to avoid overtraining on only one of these roles.
-        self.w_second_weight = (self.w_first_cnt / self.w_cnt) * winner_weight if (self.w_cnt > 0) else 0
-        self.w_first_weight  = (1 - self.w_second_weight) * winner_weight
-        self.l_second_weight = (self.l_first_cnt / self.l_cnt) * loser_weight  if (self.l_cnt > 0) else 0
-        self.l_first_weight  = (1 - self.l_second_weight) * loser_weight
+        self.w_second_weight = self.w_first_cnt / self.w_cnt if (self.w_cnt > 0) else 0
+        self.w_first_weight  = 1 - self.w_second_weight
+        self.l_second_weight = self.l_first_cnt / self.l_cnt if (self.l_cnt > 0) else 0
+        self.l_first_weight  = 1 - self.l_second_weight
+        self.w_second_weight *= winner_weight
+        self.w_first_weight  *= winner_weight
+        self.l_second_weight *= loser_weight
+        self.l_first_weight  *= loser_weight
 
 # Process for training the model
 # Periodically loads the latest model, checks for new training data, trains the model on it,
