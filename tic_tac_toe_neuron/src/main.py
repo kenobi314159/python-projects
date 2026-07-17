@@ -182,11 +182,11 @@ if __name__ == "__main__":
     parser.add_argument("--propagate-input-to-partial-dense",
         action="store_true", default=True, help="Propagate input directly to dense layers in the model. Default is True.")
     parser.add_argument("--partial-dense-width-multiplier",
-        type=int, default=1, help="Multiplication of partial dense layers width. Default value is 1.")
+        type=float, default=1, help="Multiplication of partial dense layers width. Default value is 1.")
     parser.add_argument("--partial-dense-depth",
         type=int, default=1, help="Number of partial dense layers in the model. Default value is 1.")
     parser.add_argument("--full-dense-width-multiplier",
-        type=int, default=1, help="Multiplication of full dense layers width. Default value is 1.")
+        type=float, default=1, help="Multiplication of full dense layers width. Default value is 1.")
     parser.add_argument("--full-dense-depth",
         type=int, default=1, help="Number of full dense layers in the model. Default value is 1.")
 
@@ -216,7 +216,7 @@ if __name__ == "__main__":
     #exit()
 
     trainCustomModel0(
-    name=f"model-t16-1_3x3-{args.conv3x3_depth}x{args.conv3x3_channels}_5x5-{args.conv5x5_depth}x{args.conv5x5_channels}_{str(args.propagate_input_to_partial_dense)}_pd-{args.full_dense_width_multiplier}x{args.full_dense_depth}_fd-{args.full_dense_width_multiplier}x{args.full_dense_depth}",
+    name=f"model-t16-1_3x3-{args.conv3x3_depth}x{args.conv3x3_channels}_5x5-{args.conv5x5_depth}x{args.conv5x5_channels}_{str(args.propagate_input_to_partial_dense)}_pd-{args.partial_dense_width_multiplier}x{args.partial_dense_depth}_fd-{args.full_dense_width_multiplier}x{args.full_dense_depth}",
 
     start_new=args.start_new,
     input_width=args.input_width,
@@ -235,16 +235,16 @@ if __name__ == "__main__":
     max_training_data_size=1000,
     train_interval=20*60,
     serial_rounds=50,
-    threads_num=8,
+    threads_num=4,
     shortest_cutoff=0,
     winner_weight=1.0,
     loser_weight=0.0,
-    learning_rate=0.000001,
+    learning_rate=0.0000002,
     player_training_variants=50,
     top_random_select_size=8,
     top_select_equal=True,
-    weights_scale_coef=3.0,
-    weights_scale_uniform=False,
+    weights_scale_coef=2.0,
+    weights_scale_uniform=True,
     train_against_best=True,
 
     fred_mistake_rate=0.2,
