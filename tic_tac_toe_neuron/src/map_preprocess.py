@@ -41,11 +41,11 @@ class MapVariation:
 
         return [all_variations.pop(randint(0, len(all_variations)-1)) for i in range(max_num)]
 
-    def getResizedMap(self, game_map, target_grid_size):
+    def getResizedMap(self, game_map, target_grid_size, default_value=0):
         self.size_x = len(game_map[0])
         self.size_y = len(game_map)
         map_mirrored = mapMirror(game_map, self.mirror_x, self.mirror_y)
-        map_resized, self.slice_start_x, self.slice_start_y = mapResize(map_mirrored, target_grid_size, self.pad_start_x, self.pad_start_y, self.coord_switch)
+        map_resized, self.slice_start_x, self.slice_start_y = mapResize(map_mirrored, target_grid_size, self.pad_start_x, self.pad_start_y, self.coord_switch, default_value)
         return map_resized
 
     def gameToCnn(self, x, y):
@@ -75,7 +75,7 @@ class MapVariation:
     def __str__(self):
         return f"slice_start_x: {self.slice_start_x}, slice_start_y: {self.slice_start_y}, start_x: {self.pad_start_x}, start_y: {self.pad_start_y}, coord_switch: {self.coord_switch}, mirror_x: {self.mirror_x}, mirror_y: {self.mirror_y}"
 
-def mapResize(game_map, target_grid_size, pad_start_x = None, pad_start_y = None, coord_switch = False):
+def mapResize(game_map, target_grid_size, pad_start_x = None, pad_start_y = None, coord_switch = False, default_value=0):
     if (coord_switch):
         game_map = [[game_map[y][x] for y in range(len(game_map))] for x in range(len(game_map[0]))]
 
@@ -96,8 +96,8 @@ def mapResize(game_map, target_grid_size, pad_start_x = None, pad_start_y = None
         pad_end_x = required_pad - pad_start_x
         pad_end_y = required_pad - pad_start_y
         for i in range(len(map_resized)):
-            map_resized[i] = [0] * pad_start_x + map_resized[i] + [0] * pad_end_x
-        map_resized = [[0] * target_grid_size] * pad_start_y + map_resized + [[0] * target_grid_size] * pad_end_y
+            map_resized[i] = [default_value] * pad_start_x + map_resized[i] + [default_value] * pad_end_x
+        map_resized = [[default_value] * target_grid_size] * pad_start_y + map_resized + [[default_value] * target_grid_size] * pad_end_y
 
     if (len(map_resized) > target_grid_size):
         # If map is too large -> find median of non-empty field coordinates and slice around it
@@ -217,14 +217,17 @@ def mapToCnnInput(game_map, cnn_input_grids):
 
     if (cnn_input_grids == 1):
         cnn_input = [game_map]
+        default_values = [0]
     elif (cnn_input_grids >= 2 and cnn_input_grids <= 4):
         cnn_input = [map_value_this_player, map_value_other_player, map_value_potential_this_player, map_value_potential_other_player][:cnn_input_grids]
+        default_values = [0, 0, 1, 1][:cnn_input_grids]
     elif (cnn_input_grids == 5):
         cnn_input = [game_map, map_value_this_player, map_value_other_player, map_value_potential_this_player, map_value_potential_other_player]
+        default_values = [0, 0, 0, 1, 1]
     else:
         assert (False), f"Unsupported number of input grids: {cnn_input_grids}"
 
-    return cnn_input
+    return cnn_input, default_values
 
 def testVariations():
     def test(mv, g, ts, x0, y0, x1, y1):

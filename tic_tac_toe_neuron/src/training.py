@@ -25,8 +25,6 @@ def generateTrainingDataProcess(
     model_file_lock,
     produced_data_lock,
     produced_data_list,
-    use_winners,
-    use_losers,
     kept_models,
     top_random_select_size,
     top_select_equal,
@@ -79,17 +77,15 @@ def generateTrainingDataProcess(
             if (result == 1+switched):
                 p0.recorded_game.won = True
                 p1.recorded_game.won = False
-                if (use_winners):
-                    recorded_games_info.append(p0.recorded_game)
-                if (use_losers and use_p1_result):
+                recorded_games_info.append(p0.recorded_game)
+                if (use_p1_result):
                     recorded_games_info.append(p1.recorded_game)
             elif (result == 2-switched):
                 p0.recorded_game.won = False
                 p1.recorded_game.won = True
-                if (use_winners and use_p1_result):
+                recorded_games_info.append(p0.recorded_game)
+                if (use_p1_result):
                     recorded_games_info.append(p1.recorded_game)
-                if (use_losers):
-                    recorded_games_info.append(p0.recorded_game)
 
             if (os.path.exists(abort_file) or os.path.exists(pause_file)):
                 break
@@ -121,11 +117,13 @@ class TrainingDataStats:
         self.l_first_cnt  = 0
         for g in recorded_games_info:
             if (g.won):
-                w_turns.append(len(g.played_turns))
-                self.w_first_cnt += int(g.played_first)
+                first = int(g.played_first)
+                self.w_first_cnt += first
+                w_turns.append(len(g.played_turns) + first) # Add 1 for first player because its first turn is not recorded in the set
             else:
-                l_turns.append(len(g.played_turns)+1) # Add 1 to account for the last turn that was not played by the loser
+                first = int(g.played_first)
                 self.l_first_cnt += int(g.played_first)
+                l_turns.append(len(g.played_turns) + first + 1) # Add 1 for first player and another 1 to account for the last turn that was not played by the loser
 
         self.w_cnt = len(w_turns)
         self.l_cnt = len(l_turns)
@@ -222,7 +220,11 @@ def trainModelProcess(
             pdl = produced_data_list[:]
             produced_data_list[:] = []
 
+        # Calculate and print statistics
         stats = TrainingDataStats(pdl, winner_weight, loser_weight)
+        time_passed = t - last_stat_time
+        last_stat_time = t
+        games_per_sec = stats.games_cnt / time_passed
 
         training_data = getTrainingData(
             pdl,
@@ -239,10 +241,6 @@ def trainModelProcess(
         # Truncate training data to maximum size
         training_data = training_data.truncate(max_training_data_size)
 
-        # Calculate and print statistics
-        time_passed = t - last_stat_time
-        last_stat_time = t
-        games_per_sec = stats.games_cnt / time_passed
         print(
             f"   Time passed: {time_passed:.2f} s, " \
            +f"Games: {stats.games_cnt:3}, " \
@@ -394,7 +392,7 @@ def train(
     producer_processes = []
     for i in range(num_producers):
         p = multiprocessing.Process(target=funcAbortWrapper, args=(generateTrainingDataProcess,
-            tmp_model_file, serial_rounds, model_file_lock, produced_data_lock, produced_data_list, use_winners, use_losers, kept_models, top_random_select_size, top_select_equal, train_against_top_random_select_1))
+            tmp_model_file, serial_rounds, model_file_lock, produced_data_lock, produced_data_list, kept_models, top_random_select_size, top_select_equal, train_against_top_random_select_1))
         producer_processes.append(p)
         p.start()
     

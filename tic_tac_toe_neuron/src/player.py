@@ -105,7 +105,7 @@ class TTTPlayerFred:
         return max_coord_set
 
     def getNextTurn(self, game_map):
-        preprocessed_map = packGrids(mapToCnnInput(game_map, 4))
+        preprocessed_map = packGrids(mapToCnnInput(game_map, 4)[0])
 
         map_value_potential_this_player  = preprocessed_map[0][2]
         map_value_potential_other_player = preprocessed_map[0][3]
@@ -161,7 +161,7 @@ class TTTPlayerCNN:
         self.top_random_select_size = top_random_select_size
         self.top_select_equal = top_select_equal
         self.random_player = TTTPlayerRandom()
-        self.recorded_game = CNNPlayedGameInfo()
+        self.recorded_game = CNNPlayedGameRecord()
 
     def copy(self):
         new_player = TTTPlayerCNN(self.cnn_model, self.top_random_select_size, self.top_select_equal)
@@ -221,8 +221,8 @@ class TTTPlayerCNN:
         # Transform the input into a random variation
         selected_variant = MapVariation.getRandomVariations(1, len(game_map), input_grid_size)[0]
 
-        cnn_input_transformed = self.input_transform_func(game_map, self.cnn_model.input_shape[1])
-        cnn_input_resized     = [selected_variant.getResizedMap(m, input_grid_size) for m in cnn_input_transformed]
+        cnn_input_transformed, default_values = self.input_transform_func(game_map, self.cnn_model.input_shape[1])
+        cnn_input_resized     = [selected_variant.getResizedMap(m, input_grid_size, d) for m,d in zip(cnn_input_transformed, default_values)]
         cnn_input_packed      = packGrids(cnn_input_resized)
         cnn_input             = cnn_input_packed
         cnn_output = self.cnn_model(cnn_input)[0]
@@ -236,7 +236,7 @@ class TTTPlayerCNN:
 
         cnn_output_x, cnn_output_y, game_x, game_y, max_v = self.selectTopRandom(game_map, cnn_output, input_grid_size, selected_variant)
 
-        self.recorded_game.played_turns.append(CNNPlayedTurnInfo(game_map, cnn_input_transformed, game_x, game_y))
+        self.recorded_game.played_turns.append(CNNPlayedTurnRecord(game_map, cnn_input_transformed, default_values, game_x, game_y))
 
         if (randint(0, 20) == 0):
             S += f"output:\n"
@@ -276,27 +276,29 @@ class TTTPlayerCNN:
 
         return game_x, game_y
 
-class CNNPlayedTurnInfo:
+class CNNPlayedTurnRecord:
     """
     Information about a single turn played by a CNN player for the purpose
     of generating training data later.
     """
 
-    def __init__(self, game_map, game_map_transformed, turn_x, turn_y):
-        self.game_map             = game_map
-        self.game_map_transformed = game_map_transformed
-        self.turn_x               = turn_x
-        self.turn_y               = turn_y
+    def __init__(self, game_map, game_map_transformed, default_game_map_values, turn_x, turn_y):
+        self.game_map                = game_map
+        self.game_map_transformed    = game_map_transformed
+        self.default_game_map_values = default_game_map_values
+        self.turn_x                  = turn_x
+        self.turn_y                  = turn_y
 
     def copy(self):
-        return CNNPlayedTurnInfo(
+        return CNNPlayedTurnRecord(
             self.game_map.copy(),
             [m.copy() for m in self.game_map_transformed],
+            self.default_game_map_values.copy(),
             self.turn_x,
             self.turn_y
         )
 
-class CNNPlayedGameInfo:
+class CNNPlayedGameRecord:
     """
     Information about a series of turns played by a CNN player within a single game
     for the purpose of generating training data later.
@@ -308,7 +310,7 @@ class CNNPlayedGameInfo:
         self.won          = False
 
     def copy(self):
-        result = CNNPlayedGameInfo()
+        result = CNNPlayedGameRecord()
         result.played_turns = [t.copy() for t in self.played_turns]
         result.played_first = self.played_first
         result.won          = self.won
@@ -354,8 +356,6 @@ def getTrainingData(
       For higher weights_scale_coef, the lowering of the weights goes slower and slower.
       For weights_scale_uniform==True, all turns are weighted the same as the first turns (a long game turns get lower weight for all its turns than short game turns).
     """
-    #training_data_input      = tf.constant([], shape=[0] + list(cnn_input_shape[1:]), dtype=tf.int32)
-    #return tf.constant(training_data_ref_output, dtype=tf.float32)
     training_data_input      = []
     training_data_weight     = []
     training_data_ref_output = []
@@ -398,14 +398,31 @@ def getTrainingData(
             # Define a set of random variants of the turn with different shifts, rotations and mirroring
             variants = MapVariation.getRandomVariations(training_variants, game_grid_size, cnn_grid_size)
 
+            logged = False
             for variant in variants:
                 # Apply variant to turn input map
-                input_map_variant    = [variant.getResizedMap(m, cnn_grid_size) for m in turn.game_map_transformed]
+                input_map_variant = [variant.getResizedMap(m, cnn_grid_size, d) for m,d in zip(turn.game_map_transformed, turn.default_game_map_values)]
                 training_data_input.append(input_map_variant)
 
                 # Apply variant to turn output
                 variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
-                training_data_ref_output.append(getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y))
+                ref_output_variant = getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y)
+                training_data_ref_output.append(ref_output_variant)
+
+                if (not logged):
+                    S = ""
+                    S += f"turn: {turn_index+1}/{turns_cnt}, weight: {weight:.05f}, won: {game.won}, played_first: {game.played_first}\n"
+                    S += f"input:\n"
+                    for m in input_map_variant:
+                        S += dataToStr(tf.constant(m), 0) + "\n"
+                    S += f"output:\n"
+                    S += dataToStr(tf.constant(ref_output_variant), 0)
+                    S = S.split("\n")
+                    S = process_log(S, step_size=1)
+                    S = "\n".join(S)
+                    with open(OUT_FILE + ".data" + str(turn_index), "w") as F:
+                        F.write(S)
+                    logged = True
 
     # Transform data to tensors
     training_data_input      = tf.expand_dims(tf.constant(training_data_input     , dtype=tf.int32  ), axis=-1)

@@ -24,7 +24,7 @@ COLOR_STEPS = [
 ]
 
 
-def get_colored_value(val_str):
+def get_colored_value(val_str, step_size):
     try:
         val = float(val_str)
     except ValueError:
@@ -34,15 +34,13 @@ def get_colored_value(val_str):
     if val == 0.0:
         return f"{COLOR_ZERO}{val_str}{COLOR_RESET}"
 
-    # Safe math capping for values potentially out of bounds [0.01, 1.0]
-    # Maps 0.01-0.10 -> index 0, 0.11-0.20 -> index 1, ..., up to 0.91-1.0+ -> index 9
-    step_idx = math.ceil(val * 10) - 1
+    step_idx = math.ceil(val / step_size) - 1
     step_idx = max(0, min(step_idx, 9))
 
     return f"{COLOR_STEPS[step_idx]}{val_str}{COLOR_RESET}"
 
 
-def process_log(lines):
+def process_log(lines, step_size=0.1):
     output = []
     for line in lines:
         # Keep line breaks and whitespaces intact, split by commas
@@ -53,7 +51,7 @@ def process_log(lines):
             # Strip spaces to clean the string for conversion, but remember the spacing
             stripped = part.strip()
             if stripped:
-                colored_val = get_colored_value(stripped)
+                colored_val = get_colored_value(stripped, step_size)
                 # Re-add structural padding space for clean grid alignment
                 padding = " " * (len(part) - len(part.lstrip()))
                 colored_parts.append(f"{padding}{colored_val}")

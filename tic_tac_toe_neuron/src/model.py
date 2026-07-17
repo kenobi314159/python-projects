@@ -110,22 +110,22 @@ def createCnnModel(
 
     return model
 
-def dataToStr(data):
+def dataToStr(data, decimals=2):
     """
     Converts a tensor to a string.
     """
     shape = data.shape
     if (len(shape) == 1):
-        return ",".join([f"{float(e):.2f} " for e in data])
+        return ",".join([f"{float(e):.{decimals}f} " for e in data])
     if (len(shape) == 2):
         S = ""
         for line in data:
-            S += ",".join([f"{float(e):.2f} " for e in line]) + "\n"
+            S += ",".join([f"{float(e):.{decimals}f} " for e in line]) + "\n"
         return S
     if (len(shape) == 3):
         S = ""
         for line in data:
-            S += ",".join([f"{float(e[0]):.2f} " for e in line]) + "\n"
+            S += ",".join([f"{float(e):.{decimals}f} " for e in line]) + "\n"
         return S
     if (len(shape) == 4):
         S = ""
