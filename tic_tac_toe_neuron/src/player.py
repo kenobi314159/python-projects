@@ -306,71 +306,54 @@ class TTTPlayerCNN:
 
         return game_x, game_y
 
-    def _getWeightData(self, win_strike_length, won, weights_scale_coef=0.0, weights_scale_uniform=False):
-        # For each turn, the weight is devided by the number of remaining turns in the game.
-        # The largest weight (coefficient 1.0) is for the last turn.
-        # Each turn before that has its weight lowered based on the weights_scale_coef.
-        # For weights_scale_coef = 0.0, all turns have weight 1.0.
-        # For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
-        # For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
-        # For weights_scale_uniform==True, all turns are weighted the same as the first turn (a long play gets lower weight
-        # than short play).
-        target_weight = self.winner_weight if won else self.loser_weight
-        steps = self.turns_played
-        weight_data = [[target_weight] for i in range(len(self.result_history))]
+def _getWeightData(winner_weight, loser_weight, turns_played, result_history, win_strike_length, won, weights_scale_coef=0.0, weights_scale_uniform=False):
+    # For each turn, the weight is devided by the number of remaining turns in the game.
+    # The largest weight (coefficient 1.0) is for the last turn.
+    # Each turn before that has its weight lowered based on the weights_scale_coef.
+    # For weights_scale_coef = 0.0, all turns have weight 1.0.
+    # For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
+    # For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
+    # For weights_scale_uniform==True, all turns are weighted the same as the first turn (a long play gets lower weight
+    # than short play).
+    target_weight = winner_weight if won else loser_weight
+    steps = turns_played
+    weight_data = [[target_weight] for i in range(len(result_history))]
 
-        if (weights_scale_coef > 0.0):
-            reverted_coef = 1.0 / weights_scale_coef
-            turn = self.result_history[0][0]
-            turns_remaining = steps - turn
-            for i,r in enumerate(self.result_history):
-                if (not weights_scale_uniform):
-                    turn = r[0]
-                    turns_remaining = steps - turn
-                weight_data[i][0] = target_weight / (turns_remaining ** reverted_coef)
+    if (weights_scale_coef > 0.0):
+        reverted_coef = 1.0 / weights_scale_coef
+        turn = result_history[0][0]
+        turns_remaining = steps - turn
+        for i,r in enumerate(result_history):
+            if (not weights_scale_uniform):
+                turn = r[0]
+                turns_remaining = steps - turn
+            weight_data[i][0] = target_weight / (turns_remaining ** reverted_coef)
 
-        return tf.constant(weight_data, dtype=tf.float32)
+    return tf.constant(weight_data, dtype=tf.float32)
 
-    def _getRefOutputData(self, won):
-        ref_output_data = []
-        output_grid_size = self.cnn_model.output_shape[1]
-        for _,r in self.result_history:
-            x = r[0]
-            y = r[1]
-            if (won):
-                # If player won, set expected output to 1 on index which was played
-                # and 0 everywhere else
-                exp_output = [[0 for ee in range(output_grid_size)] for i in range(output_grid_size)]
-                exp_output[y][x] = 1
-            else:
-                # If player lost, set expected output to 0 on index which was played
-                # and N everywhere else, where N is a value, whose sum over all fields
-                # is equal to 1
-                N = 1 / (output_grid_size * output_grid_size - 1)
-                exp_output = [[N for ee in range(output_grid_size)] for i in range(output_grid_size)]
-                exp_output[y][x] = 0
-            ref_output_data.append(exp_output)
-        return tf.constant(ref_output_data, dtype=tf.float32)
+def _getRefOutputData(won, cnn_output_shape, result_history):
+    ref_output_data = []
+    output_grid_size = cnn_output_shape[1]
+    for _,r in result_history:
+        x = r[0]
+        y = r[1]
+        if (won):
+            # If player won, set expected output to 1 on index which was played
+            # and 0 everywhere else
+            exp_output = [[0 for ee in range(output_grid_size)] for i in range(output_grid_size)]
+            exp_output[y][x] = 1
+        else:
+            # If player lost, set expected output to 0 on index which was played
+            # and N everywhere else, where N is a value, whose sum over all fields
+            # is equal to 1
+            N = 1 / (output_grid_size * output_grid_size - 1)
+            exp_output = [[N for ee in range(output_grid_size)] for i in range(output_grid_size)]
+            exp_output[y][x] = 0
+        ref_output_data.append(exp_output)
+    return tf.constant(ref_output_data, dtype=tf.float32)
 
-    def getTrainingData(self, win_strike_length, won=True, weights_scale_coef=0.0, weights_scale_uniform=False):
-        input_data      = self.cnn_input_history
-        weight_data     = self._getWeightData(win_strike_length, won, weights_scale_coef, weights_scale_uniform)
-        ref_output_data = self._getRefOutputData(won)
-        #if (randint(0, 30) == 0):
-        #    S = ""
-        #    turn = randint(0, len(self.result_history)-4-1)
-        #    for i in range(4):
-        #        S += "----------------\n"
-        #        S += f"turn: {turn}\n"
-        #        S += "----------------\n"
-        #        S += f"input:\n"
-        #        S += dataToStr(input_data[turn])
-        #        S += f"weight:\n"
-        #        S += dataToStr(weight_data[turn])
-        #        S += f"\noutput:\n"
-        #        S += dataToStr(ref_output_data[turn])
-        #        turn += 1
-        #    print("Writing tmp file")
-        #    with open("tmp", "w") as F:
-        #        F.write(S)
-        return trainingData(input_data, weight_data, ref_output_data)
+def getTrainingData(winner_weight, loser_weight, turns_played, result_history, cnn_input_history, cnn_output_shape, win_strike_length, won=True, weights_scale_coef=0.0, weights_scale_uniform=False):
+    input_data      = cnn_input_history
+    weight_data     = _getWeightData(winner_weight, loser_weight, turns_played, result_history, win_strike_length, won, weights_scale_coef, weights_scale_uniform)
+    ref_output_data = _getRefOutputData(won, cnn_output_shape, result_history)
+    return TrainingData(input_data, weight_data, ref_output_data)

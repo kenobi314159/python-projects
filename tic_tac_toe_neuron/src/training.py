@@ -165,9 +165,30 @@ def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, 
     training_data_list_win  = []
     training_data_list_lose = []
     for winner in winners:
-        training_data_list_win.append(winner.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
+        training_data_list_win.append(getTrainingData(
+            winner.winner_weight,
+            winner.loser_weight,
+            winner.turns_played,
+            winner.result_history,
+            winner.cnn_input_history,
+            winner.cnn_model.output_shape,
+            win_strike_length,
+            True,
+            weights_scale_coef,
+            weights_scale_uniform
+            ))
     for loser in losers:
-        training_data_list_lose.append(loser.getTrainingData(win_strike_length, True, weights_scale_coef, weights_scale_uniform))
+        training_data_list_lose.append(getTrainingData(
+            loser.winner_weight,
+            loser.loser_weight,
+            loser.turns_played,
+            loser.result_history,
+            loser.cnn_input_history,
+            loser.cnn_model.output_shape,
+            win_strike_length,
+            True,
+            weights_scale_coef,
+            weights_scale_uniform))
 
     w_first, w_second = normalizeTrainingDataWeights(training_data_list_win , winners)
     l_first, l_second = normalizeTrainingDataWeights(training_data_list_lose, losers )

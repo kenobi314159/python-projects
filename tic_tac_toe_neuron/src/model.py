@@ -133,14 +133,14 @@ def dataToStr(data):
             S += dataToStr(grid) + "\n"
         return S
 
-class trainingData:
+class TrainingData:
     def __init__(self, input_data, weight_data, ref_output_data):
         self.input_data      = input_data
         self.weight_data     = weight_data
         self.ref_output_data = ref_output_data
 
     def concat(self, other):
-        return trainingData(
+        return TrainingData(
             tf.concat([self.input_data, other.input_data], axis=0),
             tf.concat([self.weight_data, other.weight_data], axis=0),
             tf.concat([self.ref_output_data, other.ref_output_data], axis=0)
@@ -150,7 +150,7 @@ class trainingData:
         if (size >= len(self.input_data)):
             return self
 
-        return trainingData(
+        return TrainingData(
             self.input_data[len(self.input_data)-size:],
             self.weight_data[len(self.weight_data)-size:],
             self.ref_output_data[len(self.ref_output_data)-size:]
