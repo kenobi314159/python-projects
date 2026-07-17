@@ -394,7 +394,7 @@ def getTrainingData(
                 # Calculate weight for this specific turn
                 turns_remaining = turns_cnt - turn_index
                 weight = weight / (turns_remaining ** reverted_coef)
-            training_data_weight.append(weight)
+            training_data_weight += [weight] * training_variants
 
             game_grid_size = len(turn.game_map)
             cnn_grid_size  = cnn_input_shape[2]
@@ -411,9 +411,9 @@ def getTrainingData(
                 variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
                 training_data_ref_output.append(getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y))
 
-    # Transform data to TensorFlow tensors
-    training_data_input      = tf.constant([packGrids(d) for d in training_data_input], dtype=tf.int32)
-    training_data_weight     = tf.constant(training_data_weight, dtype=tf.float32)
-    training_data_ref_output = tf.constant(training_data_ref_output, dtype=tf.float32)
+    # Transform data to tensors
+    training_data_input      = tf.expand_dims(tf.constant(training_data_input     , dtype=tf.int32  ), axis=-1)
+    training_data_weight     = tf.expand_dims(tf.constant(training_data_weight    , dtype=tf.float32), axis=-1)
+    training_data_ref_output =                tf.constant(training_data_ref_output, dtype=tf.float32)
 
     return TrainingData(training_data_input, training_data_weight, training_data_ref_output)

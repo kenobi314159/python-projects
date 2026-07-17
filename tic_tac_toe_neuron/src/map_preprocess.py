@@ -174,6 +174,9 @@ def getPreprocessedValue(game_map, x, y, player, potential=False):
 
     return max_row
 
+def packListOfGrids(grids):
+    return tf.constant(grids, shape=[len(grids), len(grids[0]), len(grids[0][0]), len(grids[0][0][0]), 1], dtype=tf.int32)
+
 def packGrids(grids):
     return tf.constant(grids, shape=[1, len(grids), len(grids[0]), len(grids[0][0]), 1], dtype=tf.int32)
 
