@@ -25,18 +25,13 @@ def generateTrainingDataProcess(
     model_file_lock,
     produced_data_lock,
     produced_data_list,
-    winner_weight,
-    loser_weight,
+    use_winners,
+    use_losers,
     kept_models,
     top_random_select_size,
     top_select_equal,
-    weights_scale_coef,
-    weights_scale_uniform,
     train_against_top_random_select_1
     ):
-    use_winners = winner_weight > 0
-    use_losers = loser_weight > 0
-    assert (use_winners or use_losers), "At least one of winner_weight or loser_weight must be over 0.0."
     print(f"Generator {multiprocessing.current_process().name} started", flush=True)
     # Initialize random seed
     seed()
@@ -68,8 +63,8 @@ def generateTrainingDataProcess(
         p1_top_random_select_size = 1 if train_against_top_random_select_1 else top_random_select_size
         use_p1_result = (not train_against_top_random_select_1)
         for _ in range(serial_rounds):
-            p0 = TTTPlayerCNN(model_trained, winner_weight, loser_weight, top_random_select_size, top_select_equal)
-            p1 = TTTPlayerCNN(model_other  , winner_weight, loser_weight, p1_top_random_select_size, top_select_equal)
+            p0 = TTTPlayerCNN(model_trained, top_random_select_size, top_select_equal)
+            p1 = TTTPlayerCNN(model_other  , p1_top_random_select_size, top_select_equal)
 
             pp = [p0, p1]
             switched = randint(0,1)
@@ -117,66 +112,48 @@ def generateTrainingDataProcess(
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
-# Extract useful statistics data from list of recorded games intendend for training data
-def getTrainingStats(recorded_games_info, winner_weight, loser_weight):
-    w_turns      = []
-    l_turns      = []
-    w_first_cnt  = 0
-    l_first_cnt  = 0
-    for g in recorded_games_info:
-        if (g.won):
-            w_turns.append(len(g.played_turns))
-            w_first_cnt += int(g.played_first)
+class TrainingDataStats:
+    def __init__(self, recorded_games_info, winner_weight, loser_weight):
+        # Extract useful statistics data from list of recorded games intendend for training data
+        w_turns = []
+        l_turns = []
+        self.w_first_cnt  = 0
+        self.l_first_cnt  = 0
+        for g in recorded_games_info:
+            if (g.won):
+                w_turns.append(len(g.played_turns))
+                self.w_first_cnt += int(g.played_first)
+            else:
+                l_turns.append(len(g.played_turns)+1) # Add 1 to account for the last turn that was not played by the loser
+                self.l_first_cnt += int(g.played_first)
+
+        self.w_cnt = len(w_turns)
+        self.l_cnt = len(l_turns)
+
+        if (self.w_cnt):
+            games_turns = w_turns
         else:
-            l_turns.append(len(g.played_turns)+1) # Add 1 to account for the last turn that was not played by the loser
-            l_first_cnt += int(g.played_first)
+            games_turns = l_turns
 
-    w_cnt = len(w_turns)
-    l_cnt = len(l_turns)
+        self.games_cnt = len(games_turns)
+        self.turns_min = 0
+        self.turns_max = 0
+        self.turns_avg = 0
+        if (self.games_cnt):
+            self.turns_min = min(games_turns)
+            self.turns_max = max(games_turns)
+            self.turns_avg = sum(games_turns) / self.games_cnt
 
-    if (w_cnt):
-        games_turns = w_turns
-    else:
-        games_turns = l_turns
+        self.w_second_cnt = self.w_cnt - self.w_first_cnt
+        self.l_second_cnt = self.l_cnt - self.l_first_cnt
 
-    games_cnt = len(games_turns)
-    turns_min = 0
-    turns_max = 0
-    turns_avg = 0
-    if (games_cnt):
-        turns_min = min(games_turns)
-        turns_max = max(games_turns)
-        turns_avg = sum(games_turns) / games_cnt
-
-    w_second_cnt = w_cnt - w_first_cnt
-    l_second_cnt = l_cnt - l_first_cnt
-
-    # Weigh training data based on number of games played as first player or second player.
-    # If a majority of games were played as first player or as second player,
-    # then the weight of these majority games will be lower to avoid overtraining on only one of these roles.
-    w_second_weight = (w_first_cnt / w_cnt) * winner_weight if (w_cnt > 0) else 0
-    w_first_weight  = (1 - w_second_weight) * winner_weight
-    l_second_weight = (l_first_cnt / l_cnt) * loser_weight  if (l_cnt > 0) else 0
-    l_first_weight  = (1 - l_second_weight) * loser_weight
-
-    class TrainingDataStats:
-        def __init__(self, games_cnt, turns_min, turns_max, turns_avg, w_cnt, l_cnt, w_first_cnt, l_first_cnt, w_sc_cnt, l__cnt, w_first_weight, w_second_weight, l_first_weight, l_second_weight):
-            self.games_cnt         = games_cnt
-            self.turns_min         = turns_min
-            self.turns_max         = turns_max
-            self.turns_avg         = turns_avg
-            self.w_cnt             = w_cnt
-            self.l_cnt             = l_cnt
-            self.w_first_cnt       = w_first_cnt
-            self.l_first_cnt       = l_first_cnt
-            self.w_second_cnt      = w_second_cnt
-            self.l_second_cnt      = l_second_cnt
-            self.w_first_weight    = w_first_weight
-            self.w_second_weight   = w_second_weight
-            self.l_first_weight    = l_first_weight
-            self.l_second_weight   = l_second_weight
-
-    return TrainingDataStats(games_cnt, turns_min, turns_max, turns_avg, w_cnt, l_cnt, w_first_cnt, l_first_cnt, w_second_cnt, l_second_cnt, w_first_weight, w_second_weight, l_first_weight, l_second_weight)
+        # Weigh training data based on number of games played as first player or second player.
+        # If a majority of games were played as first player or as second player,
+        # then the weight of these majority games will be lower to avoid overtraining on only one of these roles.
+        self.w_second_weight = (self.w_first_cnt / self.w_cnt) * winner_weight if (self.w_cnt > 0) else 0
+        self.w_first_weight  = (1 - self.w_second_weight) * winner_weight
+        self.l_second_weight = (self.l_first_cnt / self.l_cnt) * loser_weight  if (self.l_cnt > 0) else 0
+        self.l_first_weight  = (1 - self.l_second_weight) * loser_weight
 
 # Process for training the model
 # Periodically loads the latest model, checks for new training data, trains the model on it,
@@ -245,7 +222,7 @@ def trainModelProcess(
             pdl = produced_data_list[:]
             produced_data_list[:] = []
 
-        stats = getTrainingStats(pdl, winner_weight, loser_weight)
+        stats = TrainingDataStats(pdl, winner_weight, loser_weight)
 
         training_data = getTrainingData(
             pdl,
@@ -270,7 +247,7 @@ def trainModelProcess(
             f"   Time passed: {time_passed:.2f} s, " \
            +f"Games: {stats.games_cnt:3}, " \
            +f"Winners/first/second: {stats.w_cnt:3}/{stats.w_first_cnt:3}/{stats.w_second_cnt:3}, " \
-           +f"Losers/first/second: {stats.l_cnt:3}/{stats.l_first_cnt:3}/{stats.l_second_cnt:3}, " \
+           +f"Losers/first/second: {stats.l_cnt:3}/{stats.l_first_cnt:3}/{stats.l_second_cnt:3}\n" \
            +f"   Turns min/avg/max: {stats.turns_min:3}/{stats.turns_avg:.2f}/{stats.turns_max}, " \
            +f"Games/sec: {games_per_sec:5.2f}, " \
            +f"Training data size: {len(training_data.input_data)}"
@@ -391,6 +368,9 @@ def train(
     test_runs=100,
     train_against_top_random_select_1=False
     ):
+    use_winners = winner_weight > 0
+    use_losers = loser_weight > 0
+    assert (use_winners or use_losers), "At least one of winner_weight or loser_weight must be over 0.0."
     assert (threads_num >= 2 + int(use_testing_thread)), f"At least {2 + int(use_testing_thread)} threads are required for the training."
     tmp_model_file = "tmp"
     num_producers = threads_num - 1 - int(use_testing_thread)
@@ -414,7 +394,7 @@ def train(
     producer_processes = []
     for i in range(num_producers):
         p = multiprocessing.Process(target=funcAbortWrapper, args=(generateTrainingDataProcess,
-            tmp_model_file, serial_rounds, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, top_random_select_size, top_select_equal, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1))
+            tmp_model_file, serial_rounds, model_file_lock, produced_data_lock, produced_data_list, use_winners, use_losers, kept_models, top_random_select_size, top_select_equal, train_against_top_random_select_1))
         producer_processes.append(p)
         p.start()
     

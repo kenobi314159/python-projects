@@ -155,18 +155,16 @@ def cycleRelevantCoordinates(game_size, cnn_output_size, resize_variant):
 
 class TTTPlayerCNN:
 
-    def __init__(self, cnn_model, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1, top_select_equal=False):
+    def __init__(self, cnn_model, top_random_select_size=1, top_select_equal=False):
         self.cnn_model = cnn_model
         self.input_transform_func = mapToCnnInput
-        self.winner_weight = winner_wight
-        self.loser_weight = loser_weight
         self.top_random_select_size = top_random_select_size
         self.top_select_equal = top_select_equal
         self.random_player = TTTPlayerRandom()
         self.recorded_game = CNNPlayedGameInfo()
 
     def copy(self):
-        new_player = TTTPlayerCNN(self.cnn_model, self.winner_weight, self.loser_weight, self.top_random_select_size, self.top_select_equal)
+        new_player = TTTPlayerCNN(self.cnn_model, self.top_random_select_size, self.top_select_equal)
         new_player.recorded_game = self.recorded_game.copy()
         return new_player
 
