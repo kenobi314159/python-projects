@@ -16,40 +16,18 @@ if (PROFILE_ENABLE):
     import cProfile
     import pstats
 
-# Sorts players by the number of turns played and leaves only those with the shortest histories
-# appearing in the set, up to the cutoff number of different history lengths.
-def cutOffShortest(players, cutoff):
-    if (len(players) == 0):
-        return players
-
-    # Leave only players with the shortest 'cutoff' histories appearing in the set
-    turns = {p.turns_played for p in players}
-    turns_sorted = sorted(list(turns))
-    if (cutoff > len(turns_sorted) or cutoff == 0):
-        cutoff = len(turns_sorted)
-
-    shortest = turns_sorted[cutoff-1]
-
-    result = []
-    for p in players:
-        if (p.turns_played <= shortest):
-            result.append(p)
-    return result
-
 # Process for generating training data
 # Periodically loads the latest model, plays a set of games against a random recent model,
 # collects training data from the winners and losers, and appends it to the output list.
 def generateTrainingDataProcess(
     model_file,
     serial_rounds,
-    shortest_cutoff,
     model_file_lock,
     produced_data_lock,
     produced_data_list,
     winner_weight,
     loser_weight,
     kept_models,
-    player_training_variants,
     top_random_select_size,
     top_select_equal,
     weights_scale_coef,
@@ -86,73 +64,45 @@ def generateTrainingDataProcess(
             model_other = tf.keras.models.load_model(f"{model_file}{model_num}.keras")
 
         # Play a set of games
-        winners = []
-        losers = []
-        stat_turns = []
-        stat_cutoff = 0
+        recorded_games_info = []
         p1_top_random_select_size = 1 if train_against_top_random_select_1 else top_random_select_size
         use_p1_result = (not train_against_top_random_select_1)
         for _ in range(serial_rounds):
-            p0 = TTTPlayerCNN(model_trained, player_training_variants, winner_weight, loser_weight, top_random_select_size, top_select_equal)
-            p1 = TTTPlayerCNN(model_other  , player_training_variants, winner_weight, loser_weight, p1_top_random_select_size, top_select_equal)
+            p0 = TTTPlayerCNN(model_trained, winner_weight, loser_weight, top_random_select_size, top_select_equal)
+            p1 = TTTPlayerCNN(model_other  , winner_weight, loser_weight, p1_top_random_select_size, top_select_equal)
+
             pp = [p0, p1]
             switched = randint(0,1)
             if (switched):
                 pp = [p1, p0]
-            pp[0].plays_first = True
-            pp[1].plays_first = False
+            pp[0].recorded_game.played_first = True
+            pp[1].recorded_game.played_first = False
+
             ttt_play = TicTacToePlay(grid_size, grid_size, *pp, win_strike_length)
             result = ttt_play.play(0)
-            stat_turns.append(p0.turns_played + p1.turns_played)
 
             if (result == 1+switched):
+                p0.recorded_game.won = True
+                p1.recorded_game.won = False
                 if (use_winners):
-                    winners.append(p0)
+                    recorded_games_info.append(p0.recorded_game)
                 if (use_losers and use_p1_result):
-                    losers.append(p1)
+                    recorded_games_info.append(p1.recorded_game)
             elif (result == 2-switched):
+                p0.recorded_game.won = False
+                p1.recorded_game.won = True
                 if (use_winners and use_p1_result):
-                    winners.append(p1)
+                    recorded_games_info.append(p1.recorded_game)
                 if (use_losers):
-                    losers.append(p0)
+                    recorded_games_info.append(p0.recorded_game)
 
             if (os.path.exists(abort_file) or os.path.exists(pause_file)):
                 break
 
-        for p in winners:
-            p.recorded_game.played_first = p.plays_first
-            p.recorded_game.won = True
-        for p in losers:
-            p.recorded_game.played_first = p.plays_first
-            p.recorded_game.won = False
-
-        # Cut off to only get players with the shortest histories (fastest win/lose)
-        len_prev_win = len(winners)
-        winners = cutOffShortest(winners, shortest_cutoff)
-
-        len_prev_lose = len(losers)
-        losers = cutOffShortest(losers, shortest_cutoff)
-
-        # Get training data
-        win_lose_stat = {}
-        training_data_list = getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform, win_lose_stat)
-
-        stat_winners = len(winners)
-        stat_losers  = len(losers)
-        stat_cutoff += len_prev_win - stat_winners
-        stat_cutoff += len_prev_lose - stat_losers
-
-        win_lose_stat["winners"] = stat_winners
-        win_lose_stat["losers"]  = stat_losers
-
-        if (len(training_data_list)):
-            training_data = training_data_list[0]
-            for td in training_data_list[1:]:
-                training_data = training_data.concat(td)
-
+        if (len(recorded_games_info)):
             # Append to output list
             with produced_data_lock:
-                produced_data_list.append((training_data, stat_turns, stat_cutoff, win_lose_stat))
+                produced_data_list += recorded_games_info
 
     if (PROFILE_ENABLE):
         identifier = f"gen_{multiprocessing.current_process().name}"
@@ -167,76 +117,66 @@ def generateTrainingDataProcess(
 
     print(f"Generator {multiprocessing.current_process().name} finished", flush=True)
 
-# Gets training data from the winners and losers, applies weights scaling if needed, and concatenates it into a single list
-def getTrainingDataList(winners, losers, win_strike_length, weights_scale_coef, weights_scale_uniform, win_lose_stat={}):
-    training_data_list_win  = []
-    training_data_list_lose = []
-    for winner in winners:
-        training_data_list_win.append(getTrainingData(
-            [winner.recorded_game],
-            winner.cnn_model.input_shape,
-            winner.training_variants,
-            winner.winner_weight,
-            winner.loser_weight,
-            weights_scale_coef,
-            weights_scale_uniform
-            ))
-    for loser in losers:
-        training_data_list_lose.append(getTrainingData(
-            [loser.recorded_game],
-            loser.cnn_model.input_shape,
-            loser.training_variants,
-            loser.winner_weight,
-            loser.loser_weight,
-            weights_scale_coef,
-            weights_scale_uniform))
+# Extract useful statistics data from list of recorded games intendend for training data
+def getTrainingStats(recorded_games_info, winner_weight, loser_weight):
+    w_turns      = []
+    l_turns      = []
+    w_first_cnt  = 0
+    l_first_cnt  = 0
+    for g in recorded_games_info:
+        if (g.won):
+            w_turns.append(len(g.played_turns))
+            w_first_cnt += int(g.played_first)
+        else:
+            l_turns.append(len(g.played_turns)+1) # Add 1 to account for the last turn that was not played by the loser
+            l_first_cnt += int(g.played_first)
 
-    w_first, w_second = normalizeTrainingDataWeights(training_data_list_win , winners)
-    l_first, l_second = normalizeTrainingDataWeights(training_data_list_lose, losers )
+    w_cnt = len(w_turns)
+    l_cnt = len(l_turns)
 
-    win_lose_stat["w_first"]  = win_lose_stat.get("w_first" , 0) + w_first
-    win_lose_stat["w_second"] = win_lose_stat.get("w_second", 0) + w_second
-    win_lose_stat["l_first"]  = win_lose_stat.get("l_first" , 0) + l_first
-    win_lose_stat["l_second"] = win_lose_stat.get("l_second", 0) + l_second
+    if (w_cnt):
+        games_turns = w_turns
+    else:
+        games_turns = l_turns
 
-    return training_data_list_win + training_data_list_lose
+    games_cnt = len(games_turns)
+    turns_min = 0
+    turns_max = 0
+    turns_avg = 0
+    if (games_cnt):
+        turns_min = min(games_turns)
+        turns_max = max(games_turns)
+        turns_avg = sum(games_turns) / games_cnt
 
-# Modify training data weights so that the combined weight of games played as first player
-# is the same as the combined weight of games played as second player, to avoid overtraining for only one of the roles.
-def normalizeTrainingDataWeights(training_data_list, players):
-    assert (len(training_data_list) == len(players)), "The number of training data items must be the same as the number of players for weight normalization."
-    if (len(training_data_list) == 0):
-        return 0, 0
+    w_second_cnt = w_cnt - w_first_cnt
+    l_second_cnt = l_cnt - l_first_cnt
 
-    #S = "Normalizing training data weights:\n"
-    #S += f"  Weights 0 original: {[float(x[0]) for x in training_data_list[0].weight_data]}\n"
+    # Weigh training data based on number of games played as first player or second player.
+    # If a majority of games were played as first player or as second player,
+    # then the weight of these majority games will be lower to avoid overtraining on only one of these roles.
+    w_second_weight = (w_first_cnt / w_cnt) * winner_weight if (w_cnt > 0) else 0
+    w_first_weight  = (1 - w_second_weight) * winner_weight
+    l_second_weight = (l_first_cnt / l_cnt) * loser_weight  if (l_cnt > 0) else 0
+    l_first_weight  = (1 - l_second_weight) * loser_weight
 
-    games_num = len(players)
-    games_played_first_num = sum([1 for p in players if (p.plays_first)])
+    class TrainingDataStats:
+        def __init__(self, games_cnt, turns_min, turns_max, turns_avg, w_cnt, l_cnt, w_first_cnt, l_first_cnt, w_sc_cnt, l__cnt, w_first_weight, w_second_weight, l_first_weight, l_second_weight):
+            self.games_cnt         = games_cnt
+            self.turns_min         = turns_min
+            self.turns_max         = turns_max
+            self.turns_avg         = turns_avg
+            self.w_cnt             = w_cnt
+            self.l_cnt             = l_cnt
+            self.w_first_cnt       = w_first_cnt
+            self.l_first_cnt       = l_first_cnt
+            self.w_second_cnt      = w_second_cnt
+            self.l_second_cnt      = l_second_cnt
+            self.w_first_weight    = w_first_weight
+            self.w_second_weight   = w_second_weight
+            self.l_first_weight    = l_first_weight
+            self.l_second_weight   = l_second_weight
 
-    played_second_weight = games_played_first_num / games_num
-    played_first_weight  = 1 - played_second_weight
-
-    #S += f"  Total games: {games_num}, played first: {games_played_first_num} ({played_first_weight:.2f}), played second: {games_num - games_played_first_num} ({played_second_weight:.2f})\n"
-
-    if (played_first_weight == 0 or played_second_weight == 0):
-        # There is only one type of data present, that will have weight 0.
-        # There is no point in training on this, so remove all the data instead.
-        training_data_list.clear()
-        players.clear()
-        #S += "  Clearing.\n"
-        #print(S)
-        return games_played_first_num, games_num - games_played_first_num
-
-    for td, p in zip(training_data_list, players):
-        coef = played_first_weight if (p.plays_first) else played_second_weight
-        td_w_float = [[float(w[0]) * coef] for w in td.weight_data]
-        td.weight_data = tf.constant(td_w_float, dtype=tf.float32)
-
-    #S += f"  Weights 1 modified: {[float(x[0]) for x in training_data_list[0].weight_data]}\n"
-    #print(S)
-
-    return games_played_first_num, games_num - games_played_first_num
+    return TrainingDataStats(games_cnt, turns_min, turns_max, turns_avg, w_cnt, l_cnt, w_first_cnt, l_first_cnt, w_second_cnt, l_second_cnt, w_first_weight, w_second_weight, l_first_weight, l_second_weight)
 
 # Process for training the model
 # Periodically loads the latest model, checks for new training data, trains the model on it,
@@ -247,7 +187,6 @@ def trainModelProcess(
     model_games,
     model_inputs_trained,
     max_training_data_size,
-    accumulate_training_data,
     train_interval,
     batch_size,
     store_interval,
@@ -255,7 +194,12 @@ def trainModelProcess(
     produced_data_lock,
     produced_data_list,
     kept_models,
-    learning_rate
+    learning_rate,
+    training_variants,
+    winner_weight,
+    loser_weight,
+    weights_scale_coef,
+    weights_scale_uniform
     ):
     print(f"Model training {multiprocessing.current_process().name} started", flush=True)
     # Load initial model
@@ -300,43 +244,37 @@ def trainModelProcess(
         with produced_data_lock:
             pdl = produced_data_list[:]
             produced_data_list[:] = []
-        new_data_size = sum([len(pd[0].input_data) for pd in pdl])
 
-        # Concatenate statistics
-        stat_turns    = sum([pd[1] for pd in pdl], [])
-        stat_cutoff   = sum([pd[2] for pd in pdl])
-        stat_win_lose = {}
-        for w_l_s in [pd[3] for pd in pdl]:
-            for k, v in w_l_s.items():
-                stat_win_lose[k] = stat_win_lose.get(k, 0) + v
+        stats = getTrainingStats(pdl, winner_weight, loser_weight)
 
-        # Concatenate training data
-        if (training_data == None or (not accumulate_training_data)):
-            training_data = pdl[0][0]
-            pdl = pdl[1:]
-        for pd in pdl:
-            training_data = training_data.concat(pd[0])
+        training_data = getTrainingData(
+            pdl,
+            model.input_shape,
+            training_variants,
+            stats.w_first_weight,
+            stats.w_second_weight,
+            stats.l_first_weight,
+            stats.l_second_weight,
+            weights_scale_coef,
+            weights_scale_uniform
+            )
 
-        # Truncate oldest training data
+        # Truncate training data to maximum size
         training_data = training_data.truncate(max_training_data_size)
 
         # Calculate and print statistics
-        stat_games     = len(stat_turns)
-        stat_avg_turns = sum(stat_turns) / stat_games
-        stat_min_turns = min(stat_turns)
-        stat_max_turns = max(stat_turns)
-        stat_winners   = stat_win_lose.get("winners" , 0)
-        stat_losers    = stat_win_lose.get("losers"  , 0)
-        stat_w_first   = stat_win_lose.get("w_first" , 0)
-        stat_w_second  = stat_win_lose.get("w_second", 0)
-        stat_l_first   = stat_win_lose.get("l_first" , 0)
-        stat_l_second  = stat_win_lose.get("l_second", 0)
-        winners_losers_total = stat_cutoff + stat_winners + stat_losers
-        stat_cutoff_perc = 100 * stat_cutoff / winners_losers_total if winners_losers_total > 0 else 0
         time_passed = t - last_stat_time
         last_stat_time = t
-        games_per_sec = stat_games / time_passed
-        print(f"   Time passed: {time_passed:.2f} s, Games: {stat_games:3}, Winners/first/second: {stat_winners:3}/{stat_w_first:3}/{stat_w_second:3}, Losers/first/second: {stat_losers:3}/{stat_l_first:3}/{stat_l_second:3}, Cut off games: {stat_cutoff:3} ({stat_cutoff_perc:.2f}%)\n   Turns min/avg/max: {stat_min_turns:3}/{stat_avg_turns:.2f}/{stat_max_turns}, Games/sec: {games_per_sec:5.2f}, New data size: {new_data_size}, Training data size: {len(training_data.input_data)}", flush=True)
+        games_per_sec = stats.games_cnt / time_passed
+        print(
+            f"   Time passed: {time_passed:.2f} s, " \
+           +f"Games: {stats.games_cnt:3}, " \
+           +f"Winners/first/second: {stats.w_cnt:3}/{stats.w_first_cnt:3}/{stats.w_second_cnt:3}, " \
+           +f"Losers/first/second: {stats.l_cnt:3}/{stats.l_first_cnt:3}/{stats.l_second_cnt:3}, " \
+           +f"   Turns min/avg/max: {stats.turns_min:3}/{stats.turns_avg:.2f}/{stats.turns_max}, " \
+           +f"Games/sec: {games_per_sec:5.2f}, " \
+           +f"Training data size: {len(training_data.input_data)}"
+           , flush=True)
 
         # Train model
         training_data.trainModel(model, batch_size, 1, MAX_TRAINING_DATA_SIZE)
@@ -351,10 +289,10 @@ def trainModelProcess(
             model.save(f"{model_file}0.keras")
 
         # Save model for storage
-        model_games += stat_games
+        model_games += stats.games_cnt
         model_inputs_trained += len(training_data.input_data)
         if (t - last_store_time > store_interval):
-            name = f"{model_name}_{stat_avg_turns:.1f}avg_{model_games}_{model_inputs_trained}"
+            name = f"{model_name}_{stats.turns_avg:.1f}avg_{model_games}_{model_inputs_trained}"
             print(f"Storing model {name}", flush=True)
             last_store_time = t
             storage.storeModel(model, name)
@@ -434,14 +372,12 @@ def train(
     model_games,
     model_inputs_trained,
     max_training_data_size,
-    accumulate_training_data,
     train_interval,
     store_interval,
     batch_size,
     serial_rounds,
     threads_num,
     use_testing_thread=False,
-    shortest_cutoff=0,
     winner_weight=1.0,
     loser_weight=1.0,
     learning_rate=0.00001,
@@ -478,13 +414,13 @@ def train(
     producer_processes = []
     for i in range(num_producers):
         p = multiprocessing.Process(target=funcAbortWrapper, args=(generateTrainingDataProcess,
-            tmp_model_file, serial_rounds, shortest_cutoff, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, player_training_variants, top_random_select_size, top_select_equal, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1))
+            tmp_model_file, serial_rounds, model_file_lock, produced_data_lock, produced_data_list, winner_weight, loser_weight, kept_models, top_random_select_size, top_select_equal, weights_scale_coef, weights_scale_uniform, train_against_top_random_select_1))
         producer_processes.append(p)
         p.start()
     
     # Create consumer process
     consumer_process = multiprocessing.Process(target=funcAbortWrapper, args=(trainModelProcess,
-        tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, accumulate_training_data, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate))
+        tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate, player_training_variants, winner_weight, loser_weight, weights_scale_coef, weights_scale_uniform))
     consumer_process.start()
 
     if (use_testing_thread):

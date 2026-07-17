@@ -155,35 +155,19 @@ def cycleRelevantCoordinates(game_size, cnn_output_size, resize_variant):
 
 class TTTPlayerCNN:
 
-    class InputVariant:
-        def __init__(self):
-            self.game_map_resized = []
-            self.slice_start_x = 0
-            self.slice_start_y = 0
-            self.pad_start_x = 0
-            self.pad_start_y = 0
-            self.cnn_input = None
-
-    def __init__(self, cnn_model, training_variants=None, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1, top_select_equal=False, plays_first=None):
+    def __init__(self, cnn_model, winner_wight=1.0, loser_weight=1.0, top_random_select_size=1, top_select_equal=False):
         self.cnn_model = cnn_model
         self.input_transform_func = mapToCnnInput
-        self.training_variants = training_variants
         self.winner_weight = winner_wight
         self.loser_weight = loser_weight
         self.top_random_select_size = top_random_select_size
         self.top_select_equal = top_select_equal
-        self.plays_first = plays_first
         self.random_player = TTTPlayerRandom()
-        self.cnn_input_history = tf.constant([], shape=[0] + list(self.cnn_model.input_shape[1:]),dtype=tf.int32)
-        self.result_history = []
-        self.turns_played = 0
         self.recorded_game = CNNPlayedGameInfo()
 
     def copy(self):
-        new_player = TTTPlayerCNN(self.cnn_model, self.training_variants, self.winner_weight, self.loser_weight, self.top_random_select_size, self.top_select_equal, self.plays_first)
-        new_player.cnn_input_history = tf.identity(self.cnn_input_history)
-        new_player.result_history = list(self.result_history)
-        new_player.turns_played = self.turns_played
+        new_player = TTTPlayerCNN(self.cnn_model, self.winner_weight, self.loser_weight, self.top_random_select_size, self.top_select_equal)
+        new_player.recorded_game = self.recorded_game.copy()
         return new_player
 
     def selectTopRandom(self, game_map, cnn_output, input_grid_size, map_variation):
@@ -230,20 +214,14 @@ class TTTPlayerCNN:
             if (not all_empty):
                 break
 
-        self.turns_played += 1
-
         # Make first move always random
         if (all_empty):
             return self.random_player.getNextTurn(game_map)
 
         input_grid_size = self.cnn_model.input_shape[2]
 
-        # Only generate actual maps for a desired subset (to reduce complexity)
-        training_variants = self.training_variants
-        variants = MapVariation.getRandomVariations(training_variants, len(game_map), input_grid_size)
-
-        # Select one of the variants to actually produce the next turn
-        selected_variant = variants[0]
+        # Transform the input into a random variation
+        selected_variant = MapVariation.getRandomVariations(1, len(game_map), input_grid_size)[0]
 
         cnn_input_transformed = self.input_transform_func(game_map, self.cnn_model.input_shape[1])
         cnn_input_resized     = [selected_variant.getResizedMap(m, input_grid_size) for m in cnn_input_transformed]
@@ -261,15 +239,6 @@ class TTTPlayerCNN:
         cnn_output_x, cnn_output_y, game_x, game_y, max_v = self.selectTopRandom(game_map, cnn_output, input_grid_size, selected_variant)
 
         self.recorded_game.played_turns.append(CNNPlayedTurnInfo(game_map, cnn_input_transformed, game_x, game_y))
-
-        # Generate referential data for all variants with the same turn
-        turn_index = self.turns_played-1
-        for i,variant in enumerate(variants):
-            variant_cnn_input_resized = [variant.getResizedMap(m, input_grid_size) for m in cnn_input_transformed]
-            variant_cnn_input_packed  = packGrids(variant_cnn_input_resized)
-            self.cnn_input_history = tf.concat([self.cnn_input_history, variant_cnn_input_packed], axis=0)
-            variant_output = variant.gameToCnn(game_x, game_y)
-            self.result_history.append((turn_index, variant_output))
 
         if (randint(0, 20) == 0):
             S += f"output:\n"
@@ -321,16 +290,31 @@ class CNNPlayedTurnInfo:
         self.turn_x               = turn_x
         self.turn_y               = turn_y
 
+    def copy(self):
+        return CNNPlayedTurnInfo(
+            self.game_map.copy(),
+            [m.copy() for m in self.game_map_transformed],
+            self.turn_x,
+            self.turn_y
+        )
+
 class CNNPlayedGameInfo:
     """
     Information about a series of turns played by a CNN player within a single game
     for the purpose of generating training data later.
     """
 
-    def __init__(self, played_turns=[], played_first=False, won=False):
-        self.played_turns = played_turns
-        self.played_first = played_first
-        self.won          = won
+    def __init__(self):
+        self.played_turns = []
+        self.played_first = False
+        self.won          = False
+
+    def copy(self):
+        result = CNNPlayedGameInfo()
+        result.played_turns = [t.copy() for t in self.played_turns]
+        result.played_first = self.played_first
+        result.won          = self.won
+        return result
 
 def getRefOutputData(won, output_grid_size, turn_x, turn_y):
     x = turn_x
@@ -353,8 +337,10 @@ def getTrainingData(
     recorded_games_info,
     cnn_input_shape,
     training_variants,
-    winner_weight,
-    loser_weight,
+    winner_first_weight,
+    winner_second_weight,
+    loser_first_weight,
+    loser_second_weight,
     weights_scale_coef=0.0,
     weights_scale_uniform=False
     ):
@@ -363,12 +349,12 @@ def getTrainingData(
 
     Weight calculation:
       For each turn, the weight is devided by the number of remaining turns in the game.
-      The largest weight (coefficient 1.0) is for the last turn.
+      The largest weight (coefficient 1.0) is for the last turn in a game.
       Each turn before that has its weight lowered based on the weights_scale_coef.
       For weights_scale_coef = 0.0, all turns have weight 1.0.
-      For weights_scale_coef = 1.0, the wights from last turn go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
-      For higher weights_scale_coef, the weights are lowered slower and slower for the earlier turns.
-      For weights_scale_uniform==True, all turns are weighted the same as the first turns (a long game turns get lower weight than short dame turns).
+      For weights_scale_coef = 1.0, the weights of the turns from last to first go 1/1, 1/2, 1/3, ..., 1/N, where N is the number of turns in the game.
+      For higher weights_scale_coef, the lowering of the weights goes slower and slower.
+      For weights_scale_uniform==True, all turns are weighted the same as the first turns (a long game turns get lower weight for all its turns than short game turns).
     """
     #training_data_input      = tf.constant([], shape=[0] + list(cnn_input_shape[1:]), dtype=tf.int32)
     #return tf.constant(training_data_ref_output, dtype=tf.float32)
@@ -381,8 +367,20 @@ def getTrainingData(
         reverted_coef = 1.0 / weights_scale_coef
 
     for game in recorded_games_info:
-        # Pre-calculate some weight variables
-        weight    = winner_weight if game.won else loser_weight
+        # Pre-calculate weight variables
+        if (game.won):
+            if (game.played_first):
+                weight = winner_first_weight
+            else:
+                weight = winner_second_weight
+        else:
+            if (game.played_first):
+                weight = loser_first_weight
+            else:
+                weight = loser_second_weight
+        if (abs(weight) < 1e-6):
+            # If the weight is nearly zero, there is no point to include the game in the training data
+            continue
         turns_cnt = len(game.played_turns)
         if (weights_scale and weights_scale_uniform):
             # Same weight for every turn
@@ -391,7 +389,7 @@ def getTrainingData(
 
         for turn_index,turn in enumerate(game.played_turns):
             if (weights_scale and (not weights_scale_uniform)):
-                # Calculate weight for this specific turn
+                # Specific weight for each turn
                 turns_remaining = turns_cnt - turn_index
                 weight = weight / (turns_remaining ** reverted_coef)
             training_data_weight += [weight] * training_variants
