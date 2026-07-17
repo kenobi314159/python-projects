@@ -348,6 +348,7 @@ def getTrainingData(
     Generate proper CNN model training data from a list of recorded games played by the CNN player.
 
     Weight calculation:
+      First, turns in each game get divided by the number of turns in the game, so that all subsequent weighing is normalized per game.
       For each turn, the weight is devided by the number of remaining turns in the game.
       The largest weight (coefficient 1.0) is for the last turn in a game.
       Each turn before that has its weight lowered based on the weights_scale_coef.
@@ -366,6 +367,7 @@ def getTrainingData(
 
     for game in recorded_games_info:
         # Pre-calculate weight variables
+        turns_cnt = len(game.played_turns)
         if (game.won):
             if (game.played_first):
                 weight = winner_first_weight
@@ -376,14 +378,20 @@ def getTrainingData(
                 weight = loser_first_weight
             else:
                 weight = loser_second_weight
+        # Normalize weight by length of the game
+        # This way we can weigh the data per game instead of per turn
+        weight /= turns_cnt
         if (abs(weight) < 1e-6):
             # If the weight is nearly zero, there is no point to include the game in the training data
             continue
-        turns_cnt = len(game.played_turns)
         if (weights_scale and weights_scale_uniform):
             # Same weight for every turn
             turns_remaining = turns_cnt
             weight = weight / (turns_remaining ** reverted_coef)
+
+        #log = (randint(0, 20) == 0)
+        #if (log):
+        #    log = randint(0, 19)
 
         for turn_index,turn in enumerate(game.played_turns):
             if (weights_scale and (not weights_scale_uniform)):
@@ -398,31 +406,31 @@ def getTrainingData(
             # Define a set of random variants of the turn with different shifts, rotations and mirroring
             variants = MapVariation.getRandomVariations(training_variants, game_grid_size, cnn_grid_size)
 
-            logged = False
-            for variant in variants:
-                # Apply variant to turn input map
-                input_map_variant = [variant.getResizedMap(m, cnn_grid_size, d) for m,d in zip(turn.game_map_transformed, turn.default_game_map_values)]
-                training_data_input.append(input_map_variant)
+            #logged = False
+            #for variant in variants:
+            #    # Apply variant to turn input map
+            #    input_map_variant = [variant.getResizedMap(m, cnn_grid_size, d) for m,d in zip(turn.game_map_transformed, turn.default_game_map_values)]
+            #    training_data_input.append(input_map_variant)
 
-                # Apply variant to turn output
-                variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
-                ref_output_variant = getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y)
-                training_data_ref_output.append(ref_output_variant)
+            #    # Apply variant to turn output
+            #    variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
+            #    ref_output_variant = getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y)
+            #    training_data_ref_output.append(ref_output_variant)
 
-                if (not logged):
-                    S = ""
-                    S += f"turn: {turn_index+1}/{turns_cnt}, weight: {weight:.05f}, won: {game.won}, played_first: {game.played_first}\n"
-                    S += f"input:\n"
-                    for m in input_map_variant:
-                        S += dataToStr(tf.constant(m), 0) + "\n"
-                    S += f"output:\n"
-                    S += dataToStr(tf.constant(ref_output_variant), 0)
-                    S = S.split("\n")
-                    S = process_log(S, step_size=1)
-                    S = "\n".join(S)
-                    with open(OUT_FILE + ".data" + str(turn_index), "w") as F:
-                        F.write(S)
-                    logged = True
+            #    if (log and (not logged)):
+            #        S = ""
+            #        S += f"weights wf/ws/lf/ls: {winner_first_weight:.3f}/{winner_second_weight:.3f}/{loser_first_weight:.3f}/{loser_second_weight:.3f} turn: {turn_index+1}/{turns_cnt}, weight: {weight:.05f}, won: {game.won}, played_first: {game.played_first}\n"
+            #        S += f"input:\n"
+            #        for m in input_map_variant:
+            #            S += dataToStr(tf.constant(m), 0) + "\n"
+            #        S += f"output:\n"
+            #        S += dataToStr(tf.constant(ref_output_variant), 0)
+            #        S = S.split("\n")
+            #        S = process_log(S, step_size=1)
+            #        S = "\n".join(S)
+            #        with open(OUT_FILE + ".data_" + str(log) + "_" + str(turn_index), "w") as F:
+            #            F.write(S)
+            #        logged = True
 
     # Transform data to tensors
     training_data_input      = tf.expand_dims(tf.constant(training_data_input     , dtype=tf.int32  ), axis=-1)

@@ -128,10 +128,7 @@ class TrainingDataStats:
         self.w_cnt = len(w_turns)
         self.l_cnt = len(l_turns)
 
-        if (self.w_cnt):
-            games_turns = w_turns
-        else:
-            games_turns = l_turns
+        games_turns = w_turns + l_turns
 
         self.games_cnt = len(games_turns)
         self.turns_min = 0
@@ -246,6 +243,8 @@ def trainModelProcess(
            +f"Games: {stats.games_cnt:3}, " \
            +f"Winners/first/second: {stats.w_cnt:3}/{stats.w_first_cnt:3}/{stats.w_second_cnt:3}, " \
            +f"Losers/first/second: {stats.l_cnt:3}/{stats.l_first_cnt:3}/{stats.l_second_cnt:3}\n" \
+           +f"   Weights: Winner first/second: {stats.w_first_weight:.3f}/{stats.w_second_weight:.3f}, " \
+           +f"Loser first/second: {stats.l_first_weight:.3f}/{stats.l_second_weight:.3f}\n" \
            +f"   Turns min/avg/max: {stats.turns_min:3}/{stats.turns_avg:.2f}/{stats.turns_max}, " \
            +f"Games/sec: {games_per_sec:5.2f}, " \
            +f"Training data size: {len(training_data.input_data)}"
