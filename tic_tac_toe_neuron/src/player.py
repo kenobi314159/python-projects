@@ -407,15 +407,16 @@ def getTrainingData(
             variants = MapVariation.getRandomVariations(training_variants, game_grid_size, cnn_grid_size)
 
             #logged = False
-            #for variant in variants:
-            #    # Apply variant to turn input map
-            #    input_map_variant = [variant.getResizedMap(m, cnn_grid_size, d) for m,d in zip(turn.game_map_transformed, turn.default_game_map_values)]
-            #    training_data_input.append(input_map_variant)
 
-            #    # Apply variant to turn output
-            #    variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
-            #    ref_output_variant = getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y)
-            #    training_data_ref_output.append(ref_output_variant)
+            for variant in variants:
+                # Apply variant to turn input map
+                input_map_variant = [variant.getResizedMap(m, cnn_grid_size, d) for m,d in zip(turn.game_map_transformed, turn.default_game_map_values)]
+                training_data_input.append(input_map_variant)
+
+                # Apply variant to turn output
+                variant_turn_x, variant_turn_y = variant.gameToCnn(turn.turn_x, turn.turn_y)
+                ref_output_variant = getRefOutputData(game.won, cnn_grid_size, variant_turn_x, variant_turn_y)
+                training_data_ref_output.append(ref_output_variant)
 
             #    if (log and (not logged)):
             #        S = ""
