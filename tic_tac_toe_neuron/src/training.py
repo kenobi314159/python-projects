@@ -154,6 +154,22 @@ class TrainingDataStats:
         self.l_second_weight *= loser_weight
         self.l_first_weight  *= loser_weight
 
+# Calulate evaluation score based on the evaluation data list
+def getEvaluationScore(eval_data_list):
+    if (len(eval_data_list) == 0):
+        return 0.0
+
+    wins   = 0
+    losses = 0
+    draws  = 0
+    for g in eval_data_list:
+        wins   += g[0]
+        losses += g[1]
+        draws  += g[2]
+
+    score = (wins + draws*0.5) / (wins + losses + draws)
+    return score
+
 # Process for training the model
 # Periodically loads the latest model, checks for new training data, trains the model on it,
 # saves the new model for generators to use, and periodically stores the model in the storage.
@@ -169,6 +185,8 @@ def trainModelProcess(
     model_file_lock,
     produced_data_lock,
     produced_data_list,
+    eval_data_lock,
+    eval_data_list,
     kept_models,
     learning_rate,
     training_variants,
@@ -191,7 +209,9 @@ def trainModelProcess(
     last_train_time = last_store_time
     storage = ModelStorage()
 
-    stat_history = []
+    # Evaluation data
+    eval_data_used = 100
+    edl = []
 
     if (PROFILE_ENABLE):
         pr = cProfile.Profile()
@@ -221,7 +241,14 @@ def trainModelProcess(
             pdl = produced_data_list[:]
             produced_data_list[:] = []
 
-        # Calculate and print statistics
+        # Get evaluation data
+        with eval_data_lock:
+            edl += eval_data_list[:]
+            eval_data_list[:] = []
+        edl = edl[-eval_data_used:]
+        eval_score = getEvaluationScore(edl)
+
+        # Calculate statistics
         stats = TrainingDataStats(pdl, winner_weight, loser_weight)
         time_passed = t - last_stat_time
         last_stat_time = t
@@ -251,6 +278,7 @@ def trainModelProcess(
            +f"Loser first/second: {stats.l_first_weight:.3f}/{stats.l_second_weight:.3f}\n" \
            +f"   Turns min/avg/max: {stats.turns_min:3}/{stats.turns_avg:.2f}/{stats.turns_max}, " \
            +f"Games/sec: {games_per_sec:5.2f}, " \
+           +f"Eval score: {eval_score:.3f}, " \
            +f"Training data size: {len(training_data.input_data)}"
            , flush=True)
 
@@ -270,7 +298,7 @@ def trainModelProcess(
         model_games += stats.games_cnt
         model_inputs_trained += len(training_data.input_data)
         if (t - last_store_time > store_interval):
-            name = f"{model_name}_{stats.turns_avg:.1f}avg_{model_games}_{model_inputs_trained}"
+            name = f"{model_name}_{stats.turns_avg:.01f}avg_{eval_score:.02f}score_{model_games}_{model_inputs_trained}"
             print(f"Storing model {name}", flush=True)
             last_store_time = t
             storage.storeModel(model, name)
@@ -296,7 +324,9 @@ def testModelProcess(
     model_name,
     model_file_lock,
     fred_mistake_rate,
-    test_runs
+    test_runs,
+    eval_data_lock,
+    eval_data_list
     ):
     print(f"Model testing {multiprocessing.current_process().name} started", flush=True)
     p_fred = TTTPlayerFred(fred_mistake_rate)
@@ -339,6 +369,8 @@ def testModelProcess(
                 break
 
         print(f"              ======== {model_wins} wins, {enemy_wins} losses, {draws} draws ========", flush=True)
+        with eval_data_lock:
+            eval_data_list.append((model_wins, enemy_wins, draws))
 
     print(f"Model testing {multiprocessing.current_process().name} finished", flush=True)
 
@@ -380,6 +412,8 @@ def train(
     model_file_lock = multiprocessing.Lock()
     produced_data_lock = multiprocessing.Lock()
     produced_data_list = manager.list()
+    eval_data_lock = multiprocessing.Lock()
+    eval_data_list = manager.list()
 
     # Initialize input files (all the same at the start)
     for i in range(kept_models):
@@ -401,13 +435,13 @@ def train(
     
     # Create consumer process
     consumer_process = multiprocessing.Process(target=funcAbortWrapper, args=(trainModelProcess,
-        tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, kept_models, learning_rate, player_training_variants, winner_weight, loser_weight, weights_scale_coef, weights_scale_uniform))
+        tmp_model_file, model_name, model_games, model_inputs_trained, max_training_data_size, train_interval, batch_size, store_interval, model_file_lock, produced_data_lock, produced_data_list, eval_data_lock, eval_data_list, kept_models, learning_rate, player_training_variants, winner_weight, loser_weight, weights_scale_coef, weights_scale_uniform))
     consumer_process.start()
 
     if (use_testing_thread):
         # Create testing process
         testing_process = multiprocessing.Process(target=funcAbortWrapper, args=(testModelProcess,
-            tmp_model_file, model_name, model_file_lock, fred_mistake_rate, test_runs))
+            tmp_model_file, model_name, model_file_lock, fred_mistake_rate, test_runs, eval_data_lock, eval_data_list))
         testing_process.start()
     
     # Join processes
