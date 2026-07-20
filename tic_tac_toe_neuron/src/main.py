@@ -91,9 +91,9 @@ def trainCustomModel0(
         storage = ModelStorage()
         m_hero, fn_hero = storage.loadLatesModelContaining(model_name)
         print(f"Loading model {fn_hero}")
-        numbering = fn_hero.split(model_name)[1].split(".")[1]
-        model_games = int(numbering.split("_")[1])
-        model_inputs_trained = int(numbering.split("_")[2])
+        numbering = fn_hero.split(model_name)[1].split(".")[-2]
+        model_games = int(numbering.split("_")[-2])
+        model_inputs_trained = int(numbering.split("_")[-1])
 
     if (load_only):
         return m_hero
@@ -211,7 +211,7 @@ if __name__ == "__main__":
     #exit()
 
     trainCustomModel0(
-    name=f"model-t16-1_3x3-{args.conv3x3_depth}x{args.conv3x3_channels}_5x5-{args.conv5x5_depth}x{args.conv5x5_channels}_{str(args.propagate_input_to_partial_dense)}_pd-{args.partial_dense_width_multiplier}x{args.partial_dense_depth}_fd-{args.full_dense_width_multiplier}x{args.full_dense_depth}",
+    name=f"model-t16-2_3x3-{args.conv3x3_depth}x{args.conv3x3_channels}_5x5-{args.conv5x5_depth}x{args.conv5x5_channels}_{str(args.propagate_input_to_partial_dense)}_pd-{args.partial_dense_width_multiplier}x{args.partial_dense_depth}_fd-{args.full_dense_width_multiplier}x{args.full_dense_depth}",
 
     start_new=args.start_new,
     input_width=args.input_width,
@@ -228,21 +228,21 @@ if __name__ == "__main__":
     load_only=False,
 
     max_training_data_size=1000,
-    train_interval=20,
+    train_interval=20*60,
     serial_rounds=20,
     threads_num=4,
-    winner_weight=1.0,
+    winner_weight=100.0,
     loser_weight=0.0,
-    learning_rate=0.0000002,
-    player_training_variants=5,
+    learning_rate=0.000001,
+    player_training_variants=50,
     top_random_select_size=8,
     top_select_equal=True,
-    weights_scale_coef=2.0,
+    weights_scale_coef=0.0,
     weights_scale_uniform=True,
     train_against_best=True,
 
     fred_mistake_rate=0.2,
-    test_runs=50,
+    test_runs=20,
     )
 
     #testModelVersions("hero_4", 3, 4, 8)
