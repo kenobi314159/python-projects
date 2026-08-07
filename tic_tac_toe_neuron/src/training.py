@@ -119,11 +119,11 @@ class TrainingDataStats:
             if (g.won):
                 first = int(g.played_first)
                 self.w_first_cnt += first
-                w_turns.append(len(g.played_turns) + first) # Add 1 for first player because its first turn is not recorded in the set
+                w_turns.append(len(g.played_turns) * 2 + first) # Add 1 for first player because its first turn is not recorded in the set
             else:
                 first = int(g.played_first)
                 self.l_first_cnt += int(g.played_first)
-                l_turns.append(len(g.played_turns) + first + 1) # Add 1 for first player and another 1 to account for the last turn that was not played by the loser
+                l_turns.append(len(g.played_turns) * 2 + first + 1) # Add 1 for first player and another 1 to account for the last turn that was not played by the loser
 
         self.w_cnt = len(w_turns)
         self.l_cnt = len(l_turns)
@@ -205,12 +205,10 @@ def trainModelProcess(
 
     training_data = None
     last_store_time = time.time()
-    last_stat_time  = last_store_time
     last_train_time = last_store_time
     storage = ModelStorage()
 
     # Evaluation data
-    eval_data_used = 100
     edl = []
 
     if (PROFILE_ENABLE):
@@ -234,7 +232,15 @@ def trainModelProcess(
             time.sleep(1)
             continue
 
+        time_passed = t - last_train_time
         last_train_time = t
+        time_readable = time.localtime()
+
+        print(
+            f"   Training round initiated, " \
+           +f"Time: {time_readable.tm_hour:02}:{time_readable.tm_min:02}:{time_readable.tm_sec:02}, " \
+           +f"Time passed: {time_passed:.2f} s, " \
+           , flush=True)
 
         # Get training data
         with produced_data_lock:
@@ -243,15 +249,12 @@ def trainModelProcess(
 
         # Get evaluation data
         with eval_data_lock:
-            edl += eval_data_list[:]
+            edl = eval_data_list[:]
             eval_data_list[:] = []
-        edl = edl[-eval_data_used:]
         eval_score = getEvaluationScore(edl)
 
         # Calculate statistics
         stats = TrainingDataStats(pdl, winner_weight, loser_weight)
-        time_passed = t - last_stat_time
-        last_stat_time = t
         games_per_sec = stats.games_cnt / time_passed
 
         training_data = getTrainingData(
@@ -270,8 +273,7 @@ def trainModelProcess(
         training_data = training_data.truncate(max_training_data_size)
 
         print(
-            f"   Time passed: {time_passed:.2f} s, " \
-           +f"Games: {stats.games_cnt:3}, " \
+            f"   Games: {stats.games_cnt:3}, " \
            +f"Winners/first/second: {stats.w_cnt:3}/{stats.w_first_cnt:3}/{stats.w_second_cnt:3}, " \
            +f"Losers/first/second: {stats.l_cnt:3}/{stats.l_first_cnt:3}/{stats.l_second_cnt:3}\n" \
            +f"   Weights: Winner first/second: {stats.w_first_weight:.3f}/{stats.w_second_weight:.3f}, " \

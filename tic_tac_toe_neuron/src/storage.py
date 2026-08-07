@@ -1,4 +1,4 @@
-from time import gmtime
+from time import localtime
 from glob import glob
 from tensorflow.keras.models import load_model
 
@@ -7,7 +7,7 @@ class ModelStorage:
         self.storage_dir = storage_dir
 
     def _getTimeString(self):
-        t = gmtime()
+        t = localtime()
         return f"{t.tm_year:04}-{t.tm_mon:02}-{t.tm_mday:02}_{t.tm_hour:02}-{t.tm_min:02}-{t.tm_sec:02}"
 
     def getStorageList(self):
