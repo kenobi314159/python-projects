@@ -3,6 +3,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Reshape, Input, Dropout, Concatenate
 from tensorflow.keras.losses import CategoricalCrossentropy
+from tensorflow.keras.initializers import VarianceScaling
 from random import randint
 
 def createCnnModel(
@@ -61,15 +62,26 @@ def createCnnModel(
     input_layer_split = tf.split(input_layer, num_or_size_splits=input_grids, axis=1)
     input_layer_split = [tf.squeeze(t, axis=1) for t in input_layer_split]
 
+    ## Use initial convolution kernel with very little variance
+    ## to get less obscured initial inputs for the dense layers
+    #conv_kernel_initializer = VarianceScaling(scale=0.01, mode="fan_avg", distribution="truncated_normal")
+
     # 3x3 convolution layers
     conv3x3_layer = input_layer_split
     for i in range(conv3x3_depth):
+        #conv3x3_layer = [Conv2D(conv3x3_channels, (3, 3), padding="same", activation=conv_activation, kernel_initializer=conv_kernel_initializer)(l) for l in conv3x3_layer]
         conv3x3_layer = [Conv2D(conv3x3_channels, (3, 3), padding="same", activation=conv_activation)(l) for l in conv3x3_layer]
 
     # 5x5 convolution layers
     conv5x5_layer = input_layer_split
     for i in range(conv5x5_depth):
+        #conv5x5_layer = [Conv2D(conv5x5_channels, (5, 5), padding="same", activation=conv_activation, kernel_initializer=conv_kernel_initializer)(l) for l in conv5x5_layer]
         conv5x5_layer = [Conv2D(conv5x5_channels, (5, 5), padding="same", activation=conv_activation)(l) for l in conv5x5_layer]
+
+    # Add the convolution input values to the convolution output
+    # to get less obscured initial inputs for the dense layers
+    conv3x3_layer = [l + i for l,i in zip(conv3x3_layer, input_layer_split)]
+    conv5x5_layer = [l + i for l,i in zip(conv5x5_layer, input_layer_split)]
 
     partial_dense_input = []
     if (conv3x3_depth):
